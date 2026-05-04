@@ -37,7 +37,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The repo includes a light client-facing theme in `.streamlit/config.toml` (green accent). Remove or edit that file to fall back to Streamlit defaults.
+Choose **Light** or **Dark** under **Appearance** in the left sidebar (runtime CSS). `.streamlit/config.toml` only sets minimal client options, not a fixed theme.
 
 ### Offline-First Mode (No Internet Required)
 To force fully local behavior (no public fetch attempts), run:

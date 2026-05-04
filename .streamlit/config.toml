@@ -1,10 +1,4 @@
-[theme]
-base = "light"
-primaryColor = "#198754"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f8f9fa"
-textColor = "#212529"
-font = "sans serif"
+# Theme is chosen in-app (sidebar: Light / Dark). Do not pin [theme] here or it overrides user choice.
 
 [client]
 toolbarMode = "minimal"

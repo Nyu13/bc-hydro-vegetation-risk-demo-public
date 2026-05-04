@@ -25,6 +25,7 @@ from src.risk_scoring import (
     identify_top_risk_driver,
     suggest_review_action,
 )
+from src.theme_ui import apply_streamlit_theme
 from src.visualization import make_top_drivers_chart, risk_color
 from src.weather_loader import load_weather_demo
 
@@ -33,6 +34,20 @@ st.set_page_config(
     page_title="BC Hydro Vegetation-Weather Outage Risk Demo",
     layout="wide",
 )
+
+if "ui_theme_radio" not in st.session_state:
+    st.session_state.ui_theme_radio = "Light"
+
+with st.sidebar:
+    st.markdown("### Appearance")
+    st.radio(
+        "Display theme",
+        ["Light", "Dark"],
+        horizontal=True,
+        key="ui_theme_radio",
+    )
+
+apply_streamlit_theme(st.session_state.ui_theme_radio)
 
 st.title("BC Hydro Vegetation-Weather Outage Risk Demo")
 st.warning(DEMO_PRIMARY_DISCLAIMER)
