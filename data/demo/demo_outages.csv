@@ -1,0 +1,6 @@
+outage_id,timestamp,region,municipality,customers_affected,cause,status
+PUB-OUT-1001,2026-05-01T02:45:00Z,Lower Mainland,Surrey,1240,Weather,Active
+PUB-OUT-1002,2026-05-01T05:20:00Z,Vancouver Island,Nanaimo,860,Tree Contact,Active
+PUB-OUT-1003,2026-05-01T08:15:00Z,North Coast,Prince Rupert,430,Wind,Restored
+PUB-OUT-1004,2026-05-01T11:40:00Z,Kootenay,Nelson,215,Equipment,Active
+PUB-OUT-1005,2026-05-01T13:10:00Z,Thompson Okanagan,Kamloops,125,Weather,Restored

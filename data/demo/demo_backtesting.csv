@@ -1,0 +1,9 @@
+event_date,region,weather_only_baseline_score,demo_model_score,observed_public_outage_count,captured_in_top_risk_group
+2025-11-03,Lower Mainland,62,68,4,1
+2025-11-03,Vancouver Island,70,79,6,1
+2025-11-03,North Coast,74,81,5,1
+2025-12-09,Kootenay,48,55,2,0
+2025-12-09,Thompson Okanagan,44,47,1,0
+2026-01-14,Lower Mainland,66,71,5,1
+2026-01-14,Vancouver Island,72,78,5,1
+2026-01-14,North Coast,76,83,7,1

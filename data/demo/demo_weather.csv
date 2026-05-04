@@ -1,0 +1,7 @@
+timestamp,region,wind_gust_kmh,precipitation_mm,temperature_c,weather_code,weather_severity_score
+2026-05-01T00:00:00Z,Lower Mainland,72,18,11,RAIN,58
+2026-05-01T06:00:00Z,Lower Mainland,84,26,10,WINDSTORM,67
+2026-05-01T12:00:00Z,Vancouver Island,92,34,9,WINDSTORM,76
+2026-05-01T18:00:00Z,Thompson Okanagan,55,5,17,CLOUDY,39
+2026-05-01T18:00:00Z,North Coast,98,41,8,THUNDERSTORM,84
+2026-05-01T18:00:00Z,Kootenay,64,11,6,RAIN,52

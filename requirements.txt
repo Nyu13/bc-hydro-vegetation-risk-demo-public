@@ -1,0 +1,12 @@
+pandas
+numpy
+requests
+streamlit
+plotly
+pydeck
+geopandas
+shapely
+rasterio
+rioxarray
+python-dotenv
+lxml

@@ -1,0 +1,7 @@
+demo_corridor_id,region,weather_severity_score,vegetation_exposure_score,public_outage_history_score,terrain_access_score,risk_score,risk_level,top_risk_driver,suggested_review_action
+DEMO-COR-001,Lower Mainland,67,78,64,42,67.6,Medium,Vegetation exposure,Prioritize patrol if forecast severity increases
+DEMO-COR-002,Lower Mainland,67,66,58,38,60.8,Medium,Wind gust / weather severity,Prioritize patrol if forecast severity increases
+DEMO-COR-003,Vancouver Island,76,84,71,55,75.3,High,Vegetation exposure,Review vegetation exposure before storm window
+DEMO-COR-004,Thompson Okanagan,39,49,44,62,45.0,Medium,Terrain/access constraints,Prioritize patrol if forecast severity increases
+DEMO-COR-005,North Coast,84,73,69,68,76.3,High,Wind gust / weather severity,Consider crew/material pre-staging
+DEMO-COR-006,Kootenay,52,58,52,74,55.2,Medium,Terrain/access constraints,Prioritize patrol if forecast severity increases

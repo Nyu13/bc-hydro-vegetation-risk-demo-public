@@ -1,0 +1,7 @@
+demo_corridor_id,region,municipality,lat,lon,overhead_length_km,forest_exposure_score,terrain_access_score,historical_outage_proxy_score
+DEMO-COR-001,Lower Mainland,Surrey,49.1913,-122.8490,22.5,78,42,64
+DEMO-COR-002,Lower Mainland,Coquitlam,49.2838,-122.7932,18.1,66,38,58
+DEMO-COR-003,Vancouver Island,Nanaimo,49.1659,-123.9401,30.4,84,55,71
+DEMO-COR-004,Thompson Okanagan,Kamloops,50.6745,-120.3273,27.3,49,62,44
+DEMO-COR-005,North Coast,Prince Rupert,54.3150,-130.3208,35.8,73,68,69
+DEMO-COR-006,Kootenay,Nelson,49.4949,-117.2948,24.7,58,74,52
