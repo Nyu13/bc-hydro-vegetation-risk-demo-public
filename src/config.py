@@ -14,11 +14,19 @@ UNOFFICIAL_SNAPSHOT_URL = (
     "https://raw.githubusercontent.com/outages/bchydro-outages/main/bchydro-outages.json"
 )
 
-DEMO_DISCLAIMER = (
-    "Demo only — uses public and proxy datasets. Final PoC would require BC Hydro "
+DEMO_PRIMARY_DISCLAIMER = (
+    "This demo illustrates dashboard workflow and analytical logic only. "
+    "It does not predict BC Hydro outages and should not be used for operational decisions."
+)
+
+DEMO_SECONDARY_DISCLAIMER = (
+    "Demo only — uses public and proxy datasets. A formal PoC would require BC Hydro "
     "internal outage history, feeder/circuit topology, vegetation records, asset "
     "condition, and operational data."
 )
+
+# Backwards compatibility for imports
+DEMO_DISCLAIMER = DEMO_SECONDARY_DISCLAIMER
 
 DEMO_OFFLINE_MODE = os.getenv("DEMO_OFFLINE_MODE", "0").strip().lower() in {"1", "true", "yes"}
 

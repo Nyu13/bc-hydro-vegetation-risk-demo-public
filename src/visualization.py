@@ -33,7 +33,7 @@ def make_top_drivers_chart(risk_df: pd.DataFrame):
         x=means.index,
         y=means.values,
         labels={"x": "Driver", "y": "Avg Score"},
-        title="Top Risk Drivers (Demo)",
+        title="Top risk drivers (illustrative)",
     )
     fig.update_layout(xaxis_tickangle=-25)
     return fig

@@ -2,24 +2,24 @@
 
 ## Purpose
 
-This project is a **demo-only** Streamlit prototype that illustrates how public and proxy datasets can be combined to estimate relative outage risk by corridor or region in British Columbia.
+This project is a **demo-only** Streamlit **concept dashboard** that illustrates how public and proxy datasets could support a **proxy-based ranking** workflow for vegetation–weather **review prioritization** (not outage prediction).
 
-**Demo only - uses public and proxy datasets. Final PoC would require BC Hydro internal outage history, feeder/circuit topology, vegetation records, asset condition, and operational data.**
+**Demo only — uses public and proxy datasets. A formal PoC would require BC Hydro internal outage history, feeder/circuit topology, vegetation records, asset condition, and operational data.**
 
-This prototype is illustrative only and must not be used for operational decision-making.
+This prototype illustrates analytical workflow only; it does not predict BC Hydro outages and must not be used for operational decisions.
 
 ## What This Demo Shows
 
 - Where outage risk may be elevated (illustrative demo corridors)
 - Why risk may be elevated (weather, vegetation proxy, outage proxy, terrain/access)
 - How corridors can be ranked by risk level
-- How a simple predicted-vs-observed backtesting view can be presented
+- How an illustrative demo backtesting view can be presented (synthetic data)
 
 ## What This Demo Does NOT Claim
 
 - It is not a production model
-- It is not a validated BC Hydro operational model
-- It does not represent feeder-level ground truth
+- It is not a validated outage forecast or operational decision system
+- It does not represent BC Hydro feeder-level ground truth from internal GIS
 - It does not include BC Hydro internal operational systems or private credentials
 
 ## Setup
@@ -36,6 +36,8 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
+
+The repo includes a light client-facing theme in `.streamlit/config.toml` (green accent). Remove or edit that file to fall back to Streamlit defaults.
 
 ### Offline-First Mode (No Internet Required)
 To force fully local behavior (no public fetch attempts), run:
