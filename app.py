@@ -166,7 +166,18 @@ def _prepare_risk_data(live_public_only: bool) -> pd.DataFrame:
 def _summary_cards(risk_df: pd.DataFrame, outage_df: pd.DataFrame) -> None:
     high_count = int((risk_df["risk_level"] == "High").sum())
     outage_count = int(len(outage_df))
-    customers = int(pd.to_numeric(outage_df.get("customers_affected", 0), errors="coerce").fillna(0).sum())
+    customer_col = next(
+        (
+            col
+            for col in ("customers_affected", "customersAffected", "numCustomersOut", "custA")
+            if col in outage_df.columns
+        ),
+        None,
+    )
+    if customer_col is None:
+        customers = 0
+    else:
+        customers = int(pd.to_numeric(outage_df[customer_col], errors="coerce").fillna(0).sum())
     expected_impact = "Illustrative only"
     cols = st.columns(6)
     cols[0].metric("Forecast Window", "24-72 hours")
