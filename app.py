@@ -26,7 +26,7 @@ from src.risk_scoring import (
     suggest_review_action,
 )
 from src.theme_ui import apply_streamlit_theme
-from src.visualization import make_top_drivers_chart, risk_color
+from src.visualization import apply_plotly_chart_theme, make_top_drivers_chart, risk_color
 from src.weather_loader import load_weather_demo
 
 
@@ -48,6 +48,7 @@ with st.sidebar:
     )
 
 apply_streamlit_theme(st.session_state.ui_theme_radio)
+_chart_dark = st.session_state.ui_theme_radio == "Dark"
 
 st.title("BC Hydro Vegetation-Weather Outage Risk Demo")
 st.warning(DEMO_PRIMARY_DISCLAIMER)
@@ -257,16 +258,10 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         help="Same region can have several demo corridors (e.g. Lower Mainland has two), each with its own marker. "
         "When enabled, regional weather appears as a blue outline ring under risk disks.",
     )
-    basemap_choice = st.selectbox(
-        "Basemap",
-        options=["Light (Carto)", "OpenStreetMap", "No basemap"],
-        index=0,
-        help="Use a lighter basemap for presentation readability.",
+    st.caption(
+        "Basemap is intentionally disabled for demo stability across corporate networks. "
+        "Map focuses on risk, weather context, and outage-proxy overlays."
     )
-    if DEMO_OFFLINE_MODE:
-        st.caption("Offline mode enabled: map renders risk overlays without internet basemap tiles.")
-    else:
-        st.caption("Online mode: choose a light basemap for clearer risk visualization.")
     mapped = risk_df.copy()
     mapped["color"] = mapped["risk_level"].apply(risk_color)
 
@@ -291,22 +286,7 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     layers: list[pdk.Layer] = []
     show_outage_markers = False
 
-    if not DEMO_OFFLINE_MODE and basemap_choice != "No basemap":
-        tile_url = (
-            "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-            if basemap_choice == "Light (Carto)"
-            else "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        )
-        layers.append(
-            pdk.Layer(
-                "TileLayer",
-                data=tile_url,
-                min_zoom=0,
-                max_zoom=19,
-                tile_size=256,
-                opacity=1.0,
-            ),
-        )
+    # No internet basemap layer by design (demo portability).
 
     # Weather: outline-only ring, drawn *under* risk fills so colors do not blend into purple/mud.
     if (
@@ -464,7 +444,7 @@ with tabs[1]:
     )
 
     st.markdown("#### Top risk drivers")
-    st.plotly_chart(make_top_drivers_chart(risk_df), width="stretch")
+    st.plotly_chart(make_top_drivers_chart(risk_df, dark=_chart_dark), width="stretch")
     st.caption(
         "Treatment recency is a placeholder only — a formal PoC would use BC Hydro vegetation patrol and treatment history."
     )
@@ -499,6 +479,7 @@ with tabs[3]:
         size="weather_only_baseline_score",
         title="Demo model score vs synthetic observed outage counts (by region)",
     )
+    apply_plotly_chart_theme(fig, dark=_chart_dark)
     st.plotly_chart(fig, width="stretch")
     with st.expander("Show synthetic backtesting input table"):
         st.dataframe(backtesting_df, width="stretch")
