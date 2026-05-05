@@ -37,7 +37,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Choose **Light** or **Dark** under **Appearance** in the left sidebar (runtime CSS). `.streamlit/config.toml` only sets minimal client options, not a fixed theme.
+Choose **Light** or **Dark** under **Appearance** in the left sidebar (scoped runtime CSS + Plotly theme). `.streamlit/config.toml` sets a **default light** Streamlit theme for native widgets (e.g. dataframes); the sidebar still switches the shell and charts.
 
 ### Offline-First Mode (No Internet Required)
 To force fully local behavior (no public fetch attempts), run:

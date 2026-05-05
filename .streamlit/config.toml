@@ -1,4 +1,7 @@
-# Theme is chosen in-app (sidebar: Light / Dark). Do not pin [theme] here or it overrides user choice.
+# Default Streamlit component styling (dataframes, etc.). Sidebar still switches shell + charts.
+[theme]
+base = "light"
+primaryColor = "#198754"
 
 [client]
 toolbarMode = "minimal"
