@@ -19,6 +19,19 @@ from src.outage_loader import (
     load_bchydro_rss,
     load_unofficial_outage_snapshots_placeholder,
 )
+from src.population_loader import (
+    attach_population,
+    load_municipality_population,
+    population_marker_radius,
+)
+from src.area_selection import (
+    prepare_municipality_hotspot_map_df,
+    prepare_region_hotspot_map_df,
+)
+from src.region_history_loader import (
+    load_municipality_outage_summary,
+    load_region_outage_summary,
+)
 from src.risk_scoring import (
     assign_risk_level,
     calculate_demo_risk_score,
@@ -139,6 +152,34 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "current_mode": "Synthetic demo backtesting data",
             "fallback_if_unavailable": "data/demo/demo_backtesting.csv",
         },
+        {
+            "dataset": "Municipality population (2021 Census)",
+            "primary_source_type": "Public (Statistics Canada, bundled subset)",
+            "used_in_demo_for": "Map marker scale / tooltips (context only)",
+            "current_mode": "Bundled demo CSV",
+            "fallback_if_unavailable": "data/demo/demo_municipality_population.csv",
+        },
+        {
+            "dataset": "Region outage summary (2025 unofficial archive)",
+            "primary_source_type": "Public proxy (unofficial snapshots)",
+            "used_in_demo_for": "Areas-with-most-issues reference table",
+            "current_mode": "Bundled demo snapshot or data/processed/region_summary.csv",
+            "fallback_if_unavailable": "data/demo/demo_region_outage_summary.csv",
+        },
+        {
+            "dataset": "Municipality outage summary (2025 unofficial archive)",
+            "primary_source_type": "Public proxy (unofficial snapshots)",
+            "used_in_demo_for": "Area selection — municipality hotspot ranking",
+            "current_mode": "Bundled demo snapshot or data/processed/municipality_summary.csv",
+            "fallback_if_unavailable": "data/demo/demo_municipality_outage_summary.csv",
+        },
+        {
+            "dataset": "Region map context (centroids + approx. population)",
+            "primary_source_type": "Demo aggregate (Census-inspired approximations)",
+            "used_in_demo_for": "Area selection map — population outline rings",
+            "current_mode": "Bundled demo CSV",
+            "fallback_if_unavailable": "data/demo/demo_region_map_context.csv",
+        },
     ]
     return pd.DataFrame(rows)
 
@@ -209,7 +250,12 @@ def _summary_cards(risk_df: pd.DataFrame, outage_df: pd.DataFrame) -> None:
     cols[5].metric("Customers affected (public)", f"{customers:,}")
 
 
-def _render_map_legend(*, show_weather_bubbles: bool, show_outage_markers: bool) -> None:
+def _render_map_legend(
+    *,
+    show_weather_bubbles: bool,
+    show_outage_markers: bool,
+    scale_by_population: bool,
+) -> None:
     """Legend matches map layers: filled disks for risk; blue outline for weather when shown."""
     swatches: list[str] = [
         '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
@@ -240,6 +286,13 @@ def _render_map_legend(*, show_weather_bubbles: bool, show_outage_markers: bool)
             'background:rgb(80, 80, 80);opacity:0.75;border:1px solid rgba(0,0,0,0.2);"></span>'
             '<span style="font-size:0.9rem;">Public outage (region proxy)</span></div>'
         )
+    if scale_by_population:
+        swatches.append(
+            '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
+            '<span style="display:inline-block;width:22px;height:14px;border-radius:50%;'
+            'background:rgb(40, 167, 69);opacity:0.9;border:1px solid rgba(0,0,0,0.2);"></span>'
+            '<span style="font-size:0.9rem;">Larger disk ≈ higher 2021 population</span></div>'
+        )
     cells = "".join(swatches)
     st.markdown(
         f'<div style="display:flex;flex-wrap:wrap;align-items:center;margin:0.35rem 0 0.75rem 0;">'
@@ -250,6 +303,7 @@ def _render_map_legend(*, show_weather_bubbles: bool, show_outage_markers: bool)
 
 def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd.DataFrame) -> None:
     st.subheader("Risk Map")
+    region_history_df, region_history_source = load_region_outage_summary()
     map_density = st.radio(
         "Map markers",
         options=["One circle per demo corridor", "One circle per region (max risk)"],
@@ -258,11 +312,16 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         help="Same region can have several demo corridors (e.g. Lower Mainland has two), each with its own marker. "
         "When enabled, regional weather appears as a blue outline ring under risk disks.",
     )
+    scale_by_population = st.checkbox(
+        "Scale marker size by 2021 Census population (municipality)",
+        value=True,
+        help="Disk area scales with √(population). Statistics Canada 2021 counts from bundled demo CSV.",
+    )
     st.caption(
         "Basemap is intentionally disabled for demo stability across corporate networks. "
-        "Map focuses on risk, weather context, and outage-proxy overlays."
+        "Map focuses on risk, weather context, population context, and outage-proxy overlays."
     )
-    mapped = risk_df.copy()
+    mapped = attach_population(risk_df.copy())
     mapped["color"] = mapped["risk_level"].apply(risk_color)
 
     show_weather_bubbles = True
@@ -274,12 +333,18 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         # Avoid double stack: risk marker already encodes region; weather ring duplicates centroid.
         show_weather_bubbles = False
 
+    if scale_by_population:
+        mapped["radius_m"] = mapped["population_2021"].apply(population_marker_radius)
+        radius_spec: int | str = "radius_m"
+    else:
+        radius_spec = 8000
+
     corridor_layer = pdk.Layer(
         "ScatterplotLayer",
         data=mapped,
         get_position="[lon, lat]",
         get_fill_color="color",
-        get_radius=8000,
+        get_radius=radius_spec,
         pickable=True,
     )
 
@@ -358,29 +423,264 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     _render_map_legend(
         show_weather_bubbles=show_weather_bubbles,
         show_outage_markers=show_outage_markers,
+        scale_by_population=scale_by_population,
     )
 
+    tooltip_lines = [
+        "Corridor: {demo_corridor_id}",
+        "Risk: {risk_level}",
+        "Score: {risk_score}",
+        "Region: {region}",
+        "Municipality: {municipality}",
+        "Population (2021): {population_2021}",
+        "Weather severity: {weather_severity_score}",
+        "Weather code: {weather_code}",
+    ]
     deck = pdk.Deck(
         map_style=None,
         initial_view_state=pdk.ViewState(latitude=53.5, longitude=-124.5, zoom=4.5),
         layers=layers,
-        tooltip={
-            "text": (
-                "Corridor: {demo_corridor_id}\nRisk: {risk_level}\nScore: {risk_score}\n"
-                "Region: {region}\nWeather severity: {weather_severity_score}\nWeather code: {weather_code}"
-            )
-        },
+        tooltip={"text": "\n".join(tooltip_lines)},
     )
     st.pydeck_chart(deck, width="stretch")
+    pop_caption = (
+        " Disk size reflects 2021 Census municipality population (√ scale)."
+        if scale_by_population
+        else ""
+    )
     st.caption(
-        "Colored disks = demo corridor risk (one per corridor, or one per region if aggregated). "
-        "Blue ring = regional weather severity (outline only, under risk). "
+        "Colored disks = demo corridor risk (one per corridor, or one per region if aggregated)."
+        + pop_caption
+        + " Blue ring = regional weather severity (outline only, under risk). "
         "Gray disks = public outage markers (under risk). "
-        "Weather ring radius grows slightly with severity."
+        "Population is context only — not used in the demo risk score."
+    )
+
+    with st.expander("2025 unofficial outage history — regions with most visible issues (proxy)"):
+        st.caption(
+            "Snapshot-based counts from the unofficial public archive (not BC Hydro–validated). "
+            "Copy `region_summary.csv` from the outage-history extractor to `data/processed/` "
+            "or set `EXTRACTOR_OUTPUT_DIR` to refresh. Source: "
+            f"{region_history_source}."
+        )
+        if region_history_df.empty:
+            st.info("No region summary loaded.")
+        else:
+            display_cols = [
+                c
+                for c in (
+                    "region_name",
+                    "unique_outages",
+                    "tree_related_outage_count",
+                    "weather_related_outage_count",
+                    "suggested_priority_score",
+                    "first_snapshot_date",
+                    "last_snapshot_date",
+                )
+                if c in region_history_df.columns
+            ]
+            st.dataframe(
+                region_history_df[display_cols].sort_values(
+                    "suggested_priority_score", ascending=False
+                ),
+                width="stretch",
+            )
+
+    with st.expander("Municipality population (2021 Census, demo subset)"):
+        pop_df = load_municipality_population()
+        if pop_df.empty:
+            st.info("Population file not available.")
+        else:
+            st.dataframe(
+                pop_df[["municipality", "region", "population_2021", "source_note"]],
+                width="stretch",
+            )
+
+
+def _area_selection_tab() -> None:
+    st.subheader("Area selection (PoC)")
+    st.warning(
+        "Unofficial outage snapshot counts (2025+ public archive proxy) — not BC Hydro–validated event history. "
+        "Population figures are approximate or municipality-level 2021 Census subsets for context only."
+    )
+    region_df, region_source = load_region_outage_summary()
+    mun_df, mun_source = load_municipality_outage_summary()
+
+    view = st.radio(
+        "Rank by",
+        ["BC Hydro region", "Municipality (top hotspots)"],
+        horizontal=True,
+    )
+
+    col_table, col_map = st.columns([1, 1.35])
+
+    with col_table:
+        st.markdown("#### Ranked areas")
+        if view == "BC Hydro region":
+            st.caption(f"Source: {region_source}")
+            if region_df.empty:
+                st.info("No region summary available.")
+            else:
+                display_cols = [
+                    c
+                    for c in (
+                        "region_name",
+                        "unique_outages",
+                        "total_customers_affected",
+                        "tree_related_outage_count",
+                        "suggested_priority_score",
+                    )
+                    if c in region_df.columns
+                ]
+                ranked = region_df.sort_values("unique_outages", ascending=False)
+                st.dataframe(ranked[display_cols], width="stretch", height=420)
+        else:
+            st.caption(f"Source: {mun_source}")
+            if mun_df.empty:
+                st.info("No municipality summary available.")
+            else:
+                display_cols = [
+                    c
+                    for c in (
+                        "municipality",
+                        "region_name",
+                        "unique_outages",
+                        "total_customers_affected",
+                        "suggested_priority_score",
+                    )
+                    if c in mun_df.columns
+                ]
+                ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
+                st.dataframe(ranked[display_cols], width="stretch", height=420)
+
+    with col_map:
+        st.markdown("#### Outage intensity + population")
+        st.caption(
+            "Basemap disabled (demo portability). Orange/red disks ≈ unofficial outage visibility count; "
+            "green outline ring ≈ √(2021 population). Hover for counts."
+        )
+        show_municipalities = st.checkbox(
+            "Overlay top municipalities (region view only)",
+            value=False,
+            disabled=view != "BC Hydro region",
+        )
+
+        layers: list[pdk.Layer] = []
+        tooltip: dict[str, str] = {"text": "No data"}
+        if view == "BC Hydro region":
+            map_df, _ = prepare_region_hotspot_map_df()
+            if map_df.empty:
+                st.info("Could not build region map (missing summary or centroids).")
+            else:
+                layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=map_df,
+                        get_position="[lon, lat]",
+                        get_fill_color="outage_color",
+                        get_radius="outage_radius_m",
+                        pickable=True,
+                    )
+                )
+                layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=map_df,
+                        get_position="[lon, lat]",
+                        get_radius="population_radius_m",
+                        filled=False,
+                        stroked=True,
+                        get_line_color=[40, 167, 69, 220],
+                        line_width_min_pixels=3,
+                        pickable=False,
+                    )
+                )
+                tooltip = {
+                    "text": "\n".join(
+                        [
+                            "Region: {region_name}",
+                            "Unique outages (proxy): {unique_outages}",
+                            "Customers affected (sum proxy): {total_customers_affected}",
+                            "Population (approx): {population_2021}",
+                            "Tree-related (proxy): {tree_related_outage_count}",
+                        ]
+                    )
+                }
+        elif view == "Municipality (top hotspots)":
+            map_df = prepare_municipality_hotspot_map_df(limit=25)
+            if map_df.empty:
+                st.info("No municipality rows with map coordinates.")
+                tooltip = {"text": "No data"}
+            else:
+                layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=map_df,
+                        get_position="[lon, lat]",
+                        get_fill_color="outage_color",
+                        get_radius="outage_radius_m",
+                        pickable=True,
+                    )
+                )
+                layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=map_df,
+                        get_position="[lon, lat]",
+                        get_radius="population_radius_m",
+                        filled=False,
+                        stroked=True,
+                        get_line_color=[40, 167, 69, 220],
+                        line_width_min_pixels=3,
+                        pickable=False,
+                    )
+                )
+                tooltip = {
+                    "text": "\n".join(
+                        [
+                            "Municipality: {municipality}",
+                            "Region: {region_name}",
+                            "Unique outages (proxy): {unique_outages}",
+                            "Customers affected (sum proxy): {total_customers_affected}",
+                            "Population (2021): {population_2021}",
+                        ]
+                    )
+                }
+
+        if show_municipalities and view == "BC Hydro region":
+            mun_map = prepare_municipality_hotspot_map_df(limit=15)
+            if not mun_map.empty:
+                layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=mun_map,
+                        get_position="[lon, lat]",
+                        get_fill_color=[100, 100, 100, 180],
+                        get_radius="outage_radius_m",
+                        pickable=True,
+                    )
+                )
+
+        if layers:
+            deck = pdk.Deck(
+                map_style=None,
+                initial_view_state=pdk.ViewState(latitude=53.5, longitude=-124.5, zoom=4.5),
+                layers=layers,
+                tooltip=tooltip,
+            )
+            st.pydeck_chart(deck, width="stretch")
+
+    st.caption(
+        "Refresh bundled summaries from the outage-history extractor: copy "
+        "`data/processed/region_summary.csv` and `municipality_summary.csv` into "
+        "`data/processed/` or set `EXTRACTOR_OUTPUT_DIR` to the extractor `data/processed` path. "
+        "See README — **Refreshing area-selection data**."
     )
 
 
-tabs = st.tabs(["Overview", "Risk Dashboard", "Risk Map", "Backtesting", "Data Sources & Assumptions"])
+tabs = st.tabs(
+    ["Overview", "Risk Dashboard", "Risk Map", "Area selection", "Backtesting", "Data Sources & Assumptions"]
+)
 
 with tabs[0]:
     st.markdown("### What this demo shows")
@@ -461,6 +761,9 @@ with tabs[2]:
     _risk_map_tab(risk_df, outages_json_df, weather_df)
 
 with tabs[3]:
+    _area_selection_tab()
+
+with tabs[4]:
     st.subheader("Backtesting")
     st.warning("Synthetic demo backtesting only — not validated historical outage performance.")
     st.caption("All metrics and charts on this tab use synthetic demo records for illustration.")
@@ -484,7 +787,7 @@ with tabs[3]:
     with st.expander("Show synthetic backtesting input table"):
         st.dataframe(backtesting_df, width="stretch")
 
-with tabs[4]:
+with tabs[5]:
     st.subheader("Data sources & assumptions")
     st.markdown(
         """

@@ -86,7 +86,29 @@ When enabled, those sources return empty data on fetch failure instead of using 
 - **Real public (preferred):** BC Hydro outage JSON/RSS, ECCC/MSC weather endpoints.
 - **Public proxy:** unofficial outage snapshots, public transmission/land-cover proxy concepts.
 - **Synthetic demo files:** `data/demo/demo_corridors.csv`, `data/demo/demo_weather.csv`, `data/demo/demo_outages.csv`, `data/demo/demo_risk_scores.csv`, `data/demo/demo_backtesting.csv`.
+- **Bundled public context:** `data/demo/demo_municipality_population.csv` (Statistics Canada 2021 Census subset), `data/demo/demo_region_outage_summary.csv` (2025 unofficial snapshot region ranking), `data/demo/demo_municipality_outage_summary.csv` (top municipality hotspots), `data/demo/demo_region_map_context.csv` (region centroids + approximate regional population for map context).
 - If real public fetch fails (or offline mode is enabled), the app uses synthetic fallback files to remain runnable.
+
+### Refreshing area-selection data (from outage-history extractor)
+
+After updating summaries in `bchydro-outage-history-extractor`:
+
+```bash
+# Option A — point the app at extractor output (no copy)
+set EXTRACTOR_OUTPUT_DIR=C:\workspace\bchydro-outage-history-extractor\data\processed
+streamlit run app.py
+```
+
+```bash
+# Option B — refresh bundled demo CSVs (from demo repo root)
+python TMP/scripts/refresh_area_selection_data.py
+```
+
+Or manually copy `region_summary.csv` and `municipality_summary.csv` into `data/processed/`. The **Area selection** tab ranks regions/municipalities by unofficial snapshot outage counts and overlays approximate 2021 population on the map (no basemap).
+
+**Top regions by unique outages (2025 unofficial archive, bundled snapshot):** Lower Mainland (~16k), South VI (~4.8k), North VI (~4.6k), Northern (~4k), Central Interior (~2.6k), Okanagan/Kootenay (~3.1k), Thompson/Shuswap (~3.1k).
+
+**Population on map:** municipality disks use Statistics Canada 2021 CSD counts where available; regional green rings use approximate regional totals in `demo_region_map_context.csv` (demo-only, not official BC Hydro statistics).
 
 ## Demo Risk Formula (Illustrative)
 

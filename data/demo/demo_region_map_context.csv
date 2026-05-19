@@ -1,0 +1,8 @@
+region_name,lat,lon,population_2021,source_note
+Lower Mainland,49.25,-122.85,2950000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+South VI,48.43,-123.37,750000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+North VI,50.02,-125.25,450000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+Central Interior,53.92,-122.75,180000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+Northern,56.25,-124.75,280000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+Okanagan/Kootenay,50.00,-118.50,520000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
+Thompson/Shuswap,51.00,-119.50,240000,Approx. 2021 Census aggregate for demo (BC Hydro region; not official BC Hydro stat)
