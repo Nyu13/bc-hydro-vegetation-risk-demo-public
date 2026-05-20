@@ -12,7 +12,6 @@ from src.population_loader import load_municipality_population, population_marke
 BC_DEFAULT_VIEW = {"latitude": 53.5, "longitude": -124.5, "zoom": 4.5}
 REGION_SELECTION_ZOOM = 8.0
 MUNICIPALITY_SELECTION_ZOOM = 10.5
-SELECTED_MARKER_COLOR = [255, 220, 0, 255]
 
 
 def load_region_map_context() -> pd.DataFrame:
@@ -94,29 +93,6 @@ def selection_area_map_view_state(
 ) -> pdk.ViewState:
     zoom = MUNICIPALITY_SELECTION_ZOOM if municipality else REGION_SELECTION_ZOOM
     return pdk.ViewState(latitude=lat, longitude=lon, zoom=zoom)
-
-
-def selected_marker_layer(
-    map_df: pd.DataFrame,
-    id_column: str,
-    selected_id: str | None,
-) -> pdk.Layer | None:
-    """Highlight the selected row with a larger golden disk on top."""
-    if not selected_id or map_df.empty or id_column not in map_df.columns:
-        return None
-    hit = map_df.loc[map_df[id_column] == selected_id]
-    if hit.empty:
-        return None
-    highlight = hit.copy()
-    highlight["highlight_radius_m"] = (highlight["outage_radius_m"] * 1.35).astype(int)
-    return pdk.Layer(
-        "ScatterplotLayer",
-        data=highlight,
-        get_position="[lon, lat]",
-        get_fill_color=SELECTED_MARKER_COLOR,
-        get_radius="highlight_radius_m",
-        pickable=False,
-    )
 
 
 # Tighter caps for municipality hotspot view — Metro Vancouver CSDs are close

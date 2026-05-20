@@ -36,7 +36,6 @@ from src.area_selection import (
     lookup_region_coordinates,
     prepare_municipality_hotspot_map_df,
     prepare_region_hotspot_map_df,
-    selected_marker_layer,
     selection_area_map_view_state,
 )
 from src.risk_scoring import (
@@ -691,7 +690,6 @@ def _area_selection_tab() -> None:
         layers: list[pdk.Layer] = []
         tooltip: dict[str, str] = {"text": "No data"}
         map_df = pd.DataFrame()
-        map_id_column = "region_name"
 
         if is_region_view:
             map_df, _ = prepare_region_hotspot_map_df()
@@ -702,7 +700,6 @@ def _area_selection_tab() -> None:
                 tooltip = _area_region_map_tooltip()
         else:
             map_df = prepare_municipality_hotspot_map_df(limit=25)
-            map_id_column = "municipality"
             if map_df.empty:
                 st.info("No municipality rows with map coordinates.")
                 tooltip = {"text": "No data"}
@@ -723,10 +720,6 @@ def _area_selection_tab() -> None:
                         pickable=True,
                     )
                 )
-
-        highlight = selected_marker_layer(map_df, map_id_column, selected_id)
-        if highlight is not None:
-            layers.append(highlight)
 
         if selected_coords is not None:
             view_state = selection_area_map_view_state(
