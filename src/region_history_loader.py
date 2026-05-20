@@ -83,6 +83,10 @@ def _customer_metrics_from_history(
 def _normalize_cause_count_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Coerce deduped unique-outage cause count columns when present."""
     out = df.copy()
+    if "tree_related_unique_outages" not in out.columns and "tree_related_outage_count" in out.columns:
+        out["tree_related_unique_outages"] = out["tree_related_outage_count"]
+    if "weather_related_unique_outages" not in out.columns and "weather_related_outage_count" in out.columns:
+        out["weather_related_unique_outages"] = out["weather_related_outage_count"]
     for col in ("tree_related_unique_outages", "weather_related_unique_outages"):
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
