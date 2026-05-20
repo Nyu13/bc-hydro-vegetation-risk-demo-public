@@ -18,7 +18,6 @@ DEMO_MUNICIPALITY_SUMMARY_FILENAME = "demo_municipality_outage_summary.csv"
 
 CUSTOMER_METRIC_COLS = (
     "avg_customers_per_unique_outage",
-    "median_customers_per_outage",
     "average_customers_affected",
 )
 
@@ -75,9 +74,6 @@ def _customer_metrics_from_history(
         row = dict(zip(group_cols, keys))
         row["avg_customers_per_unique_outage"] = (
             float(per_outage.mean()) if len(per_outage) else 0.0
-        )
-        row["median_customers_per_outage"] = (
-            float(per_outage.median()) if len(per_outage) else 0.0
         )
         row["average_customers_affected"] = float(customers.mean()) if len(customers) else 0.0
         rows.append(row)
