@@ -316,8 +316,14 @@ def _customer_metric_column_config() -> dict:
             help="Mean of peak customers_out per unique outage_id (deduped across snapshots).",
             format="%.0f",
         ),
-        "median_customers_per_outage": st.column_config.NumberColumn(
-            "Median customers per outage",
+        "tree_related_outage_count": st.column_config.NumberColumn(
+            "Tree-related outages",
+            help="Distinct outage_ids with tree/vegetation cause on any snapshot row.",
+            format="%.0f",
+        ),
+        "weather_related_outage_count": st.column_config.NumberColumn(
+            "Weather-related outages",
+            help="Distinct outage_ids with weather cause on any snapshot row.",
             format="%.0f",
         ),
     }
@@ -508,6 +514,7 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
                 region_history_df[display_cols].sort_values(
                     "suggested_priority_score", ascending=False
                 ),
+                column_config=_customer_metric_column_config(),
                 width="stretch",
             )
 
@@ -543,10 +550,8 @@ def _area_selection_tab() -> None:
 
     customer_metric_caption = (
         "**Avg customers per outage (max per outage):** for each unique outage_id, take the peak "
-        "`num_customers_out` seen across snapshot rows, then average across outages in that area. "
-        "Unlike summing snapshot rows, this stays below regional population and reflects typical outage size."
+        "`num_customers_out` seen across snapshot rows, then average across outages in that area."
     )
-
     view = st.radio(
         "Rank by",
         ["BC Hydro region", "Municipality (top hotspots)"],
@@ -568,8 +573,8 @@ def _area_selection_tab() -> None:
                         "region_name",
                         "unique_outages",
                         "avg_customers_per_unique_outage",
-                        "median_customers_per_outage",
                         "tree_related_outage_count",
+                        "weather_related_outage_count",
                         "suggested_priority_score",
                     )
                     if c in region_df.columns
@@ -594,6 +599,8 @@ def _area_selection_tab() -> None:
                         "region_name",
                         "unique_outages",
                         "avg_customers_per_unique_outage",
+                        "tree_related_outage_count",
+                        "weather_related_outage_count",
                         "suggested_priority_score",
                     )
                     if c in mun_df.columns
@@ -656,7 +663,8 @@ def _area_selection_tab() -> None:
                             "Unique outages (proxy): {unique_outages}",
                             "Avg customers per outage (max): {avg_customers_per_unique_outage}",
                             "Population (approx): {population_2021}",
-                            "Tree-related (proxy): {tree_related_outage_count}",
+                            "Tree-related outages: {tree_related_outage_count}",
+                            "Weather-related outages: {weather_related_outage_count}",
                         ]
                     )
                 }

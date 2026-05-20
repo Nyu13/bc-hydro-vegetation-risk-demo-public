@@ -79,10 +79,6 @@ def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
         merged["avg_customers_per_unique_outage"] = pd.to_numeric(
             merged["avg_customers_per_unique_outage"], errors="coerce"
         ).fillna(0).round(1)
-    if "median_customers_per_outage" in merged.columns:
-        merged["median_customers_per_outage"] = pd.to_numeric(
-            merged["median_customers_per_outage"], errors="coerce"
-        ).fillna(0).round(1)
     return merged, source
 
 
