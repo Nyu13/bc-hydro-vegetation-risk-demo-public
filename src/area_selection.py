@@ -6,7 +6,6 @@ import pandas as pd
 
 from src.config import DEMO_DATA_DIR
 from src.population_loader import load_municipality_population, population_marker_radius
-from src.region_history_loader import load_municipality_outage_summary, load_region_outage_summary
 
 
 def load_region_map_context() -> pd.DataFrame:
@@ -59,6 +58,8 @@ def outage_intensity_color(unique_outages: float | int | None, max_outages: floa
 
 def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
     """Merge unofficial region outage summary with centroids and regional population."""
+    from src.region_history_loader import load_region_outage_summary
+
     summary_df, source = load_region_outage_summary()
     context_df = load_region_map_context()
     if summary_df.empty or context_df.empty:
@@ -84,6 +85,8 @@ def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
 
 def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
     """Top municipalities by priority score with population coordinates when available."""
+    from src.region_history_loader import load_municipality_outage_summary
+
     mun_df, _ = load_municipality_outage_summary()
     if mun_df.empty:
         return mun_df

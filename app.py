@@ -24,14 +24,14 @@ from src.population_loader import (
     load_municipality_population,
     population_marker_radius,
 )
-from src.area_selection import (
-    prepare_municipality_hotspot_map_df,
-    prepare_region_hotspot_map_df,
-)
 from src.region_history_loader import (
     load_municipality_outage_summary,
     load_region_outage_summary,
     select_display_columns,
+)
+from src.area_selection import (
+    prepare_municipality_hotspot_map_df,
+    prepare_region_hotspot_map_df,
 )
 from src.risk_scoring import (
     assign_risk_level,
