@@ -16,9 +16,37 @@ HISTORY_FILENAME = "bchydro_public_outages_history.parquet"
 DEMO_REGION_SUMMARY_FILENAME = "demo_region_outage_summary.csv"
 DEMO_MUNICIPALITY_SUMMARY_FILENAME = "demo_municipality_outage_summary.csv"
 
-CUSTOMER_METRIC_COLS = (
+CUSTOMER_METRIC_COLS = ("avg_customers_per_unique_outage",)
+
+REGION_SUMMARY_DISPLAY_COLS = (
+    "region_name",
+    "unique_outages",
     "avg_customers_per_unique_outage",
-    "average_customers_affected",
+    "tree_related_outage_count",
+    "weather_related_outage_count",
+    "suggested_priority_score",
+    "first_snapshot_date",
+    "last_snapshot_date",
+)
+
+MUNICIPALITY_SUMMARY_DISPLAY_COLS = (
+    "municipality",
+    "region_name",
+    "unique_outages",
+    "avg_customers_per_unique_outage",
+    "tree_related_outage_count",
+    "weather_related_outage_count",
+    "suggested_priority_score",
+)
+
+# Snapshot-row sums/means — never shown in Area selection UI
+_SNAPSHOT_CUSTOMER_COLS = frozenset(
+    {
+        "total_customers_affected",
+        "average_customers_affected",
+        "median_customers_per_outage",
+        "max_customers_affected",
+    }
 )
 
 
@@ -75,22 +103,36 @@ def _customer_metrics_from_history(
         row["avg_customers_per_unique_outage"] = (
             float(per_outage.mean()) if len(per_outage) else 0.0
         )
-        row["average_customers_affected"] = float(customers.mean()) if len(customers) else 0.0
         rows.append(row)
     return pd.DataFrame(rows)
 
 
 def _normalize_cause_count_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Coerce deduped unique-outage cause count columns when present."""
+    """Canonicalize deduped unique-outage cause counts (extractor column names)."""
     out = df.copy()
-    if "tree_related_unique_outages" not in out.columns and "tree_related_outage_count" in out.columns:
-        out["tree_related_unique_outages"] = out["tree_related_outage_count"]
-    if "weather_related_unique_outages" not in out.columns and "weather_related_outage_count" in out.columns:
-        out["weather_related_unique_outages"] = out["weather_related_outage_count"]
-    for col in ("tree_related_unique_outages", "weather_related_unique_outages"):
+    legacy_map = (
+        ("tree_related_unique_outages", "tree_related_outage_count"),
+        ("weather_related_unique_outages", "weather_related_outage_count"),
+    )
+    for legacy, canonical in legacy_map:
+        if canonical not in out.columns and legacy in out.columns:
+            out[canonical] = out[legacy]
+        if legacy in out.columns and canonical in out.columns:
+            out[canonical] = out[canonical].fillna(out[legacy])
+        if legacy in out.columns:
+            out = out.drop(columns=[legacy])
+    for col in ("tree_related_outage_count", "weather_related_outage_count"):
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
     return out
+
+
+def select_display_columns(df: pd.DataFrame, *, municipality: bool) -> list[str]:
+    """Columns safe for Area selection tables (unique-outage metrics only)."""
+    preferred = (
+        MUNICIPALITY_SUMMARY_DISPLAY_COLS if municipality else REGION_SUMMARY_DISPLAY_COLS
+    )
+    return [c for c in preferred if c in df.columns]
 
 
 def _enrich_customer_metrics(df: pd.DataFrame, *, municipality: bool) -> pd.DataFrame:
@@ -148,6 +190,9 @@ def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
             if "region_name" not in df.columns:
                 raise ValueError(f"Missing region_name in {path}")
             df = _normalize_cause_count_columns(_enrich_customer_metrics(df, municipality=False))
+            drop_cols = [c for c in _SNAPSHOT_CUSTOMER_COLS if c in df.columns]
+            if drop_cols:
+                df = df.drop(columns=drop_cols)
             label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001
@@ -167,6 +212,9 @@ def load_municipality_outage_summary() -> tuple[pd.DataFrame, str]:
             if "region_name" not in df.columns and "region" in df.columns:
                 df = df.rename(columns={"region": "region_name"})
             df = _normalize_cause_count_columns(_enrich_customer_metrics(df, municipality=True))
+            drop_cols = [c for c in _SNAPSHOT_CUSTOMER_COLS if c in df.columns]
+            if drop_cols:
+                df = df.drop(columns=drop_cols)
             label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001

@@ -31,6 +31,7 @@ from src.area_selection import (
 from src.region_history_loader import (
     load_municipality_outage_summary,
     load_region_outage_summary,
+    select_display_columns,
 )
 from src.risk_scoring import (
     assign_risk_level,
@@ -309,22 +310,32 @@ def _archive_snapshot_range_label(df: pd.DataFrame) -> str:
     return f"{start} to {end}, unofficial archive"
 
 
-def _customer_metric_column_config() -> dict:
+def _area_selection_column_config() -> dict:
     return {
+        "unique_outages": st.column_config.NumberColumn(
+            "Unique outages",
+            help="Distinct outage_ids in the unofficial archive (not a sum of snapshot rows).",
+            format="%.0f",
+        ),
         "avg_customers_per_unique_outage": st.column_config.NumberColumn(
-            "Avg customers per outage (max per outage)",
-            help="Mean of peak customers_out per unique outage_id (deduped across snapshots).",
+            "Avg customers per unique outage",
+            help="Mean of peak num_customers_out per outage_id (max across snapshot rows).",
             format="%.0f",
         ),
-        "tree_related_unique_outages": st.column_config.NumberColumn(
-            "Tree-related (unique outages)",
-            help="Distinct outage_ids with tree/vegetation cause on any snapshot row.",
+        "tree_related_outage_count": st.column_config.NumberColumn(
+            "Tree-related outages",
+            help="Unique outages with tree/vegetation cause on any snapshot row.",
             format="%.0f",
         ),
-        "weather_related_unique_outages": st.column_config.NumberColumn(
-            "Weather-related (unique outages)",
-            help="Distinct outage_ids with weather cause on any snapshot row.",
+        "weather_related_outage_count": st.column_config.NumberColumn(
+            "Weather-related outages",
+            help="Unique outages with weather cause on any snapshot row.",
             format="%.0f",
+        ),
+        "suggested_priority_score": st.column_config.NumberColumn(
+            "Priority score",
+            help="Weighted score from unique-outage metrics only (see extractor README).",
+            format="%.3f",
         ),
     }
 
@@ -497,24 +508,12 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         if region_history_df.empty:
             st.info("No region summary loaded.")
         else:
-            display_cols = [
-                c
-                for c in (
-                    "region_name",
-                    "unique_outages",
-                    "tree_related_unique_outages",
-                    "weather_related_unique_outages",
-                    "suggested_priority_score",
-                    "first_snapshot_date",
-                    "last_snapshot_date",
-                )
-                if c in region_history_df.columns
-            ]
+            display_cols = select_display_columns(region_history_df, municipality=False)
             st.dataframe(
                 region_history_df[display_cols].sort_values(
                     "suggested_priority_score", ascending=False
                 ),
-                column_config=_customer_metric_column_config(),
+                column_config=_area_selection_column_config(),
                 width="stretch",
             )
 
@@ -544,17 +543,15 @@ def _area_selection_tab() -> None:
         archive_range = f"{start} to {end}, public archive proxy"
 
     st.warning(
-        f"Unofficial outage snapshot counts ({archive_range}) — not BC Hydro–validated event history. "
-        "Population figures are approximate or municipality-level 2021 Census subsets for context only."
+        f"Unofficial outage archive proxy ({archive_range}) — not BC Hydro–validated event history. "
+        "All outage counts in this tab are **unique outages** (distinct outage_ids), not sums of "
+        "snapshot rows. Population is context only."
     )
 
-    customer_metric_caption = (
-        "**Avg customers per outage (max per outage):** for each unique outage_id, take the peak "
-        "`num_customers_out` seen across snapshot rows, then average across outages in that area."
-    )
-    cause_count_caption = (
-        "**Tree/weather counts** are unique outages with that cause flag on any snapshot row, "
-        "not sums of snapshot rows."
+    metrics_caption = (
+        "**Customer impact:** `avg_customers_per_unique_outage` — mean of peak `num_customers_out` "
+        "per outage_id. **Cause counts:** `tree_related_outage_count` / `weather_related_outage_count` "
+        "— unique outages with that flag on any snapshot row."
     )
     view = st.radio(
         "Rank by",
@@ -571,60 +568,35 @@ def _area_selection_tab() -> None:
             if region_df.empty:
                 st.info("No region summary available.")
             else:
-                display_cols = [
-                    c
-                    for c in (
-                        "region_name",
-                        "unique_outages",
-                        "avg_customers_per_unique_outage",
-                        "tree_related_unique_outages",
-                        "weather_related_unique_outages",
-                        "suggested_priority_score",
-                    )
-                    if c in region_df.columns
-                ]
+                display_cols = select_display_columns(region_df, municipality=False)
                 ranked = region_df.sort_values("unique_outages", ascending=False)
                 st.dataframe(
                     ranked[display_cols],
-                    column_config=_customer_metric_column_config(),
+                    column_config=_area_selection_column_config(),
                     width="stretch",
                     height=420,
                 )
-                st.caption(customer_metric_caption)
-                st.caption(cause_count_caption)
+                st.caption(metrics_caption)
         else:
             st.caption(f"Source: {mun_source}")
             if mun_df.empty:
                 st.info("No municipality summary available.")
             else:
-                display_cols = [
-                    c
-                    for c in (
-                        "municipality",
-                        "region_name",
-                        "unique_outages",
-                        "avg_customers_per_unique_outage",
-                        "tree_related_unique_outages",
-                        "weather_related_unique_outages",
-                        "suggested_priority_score",
-                    )
-                    if c in mun_df.columns
-                ]
+                display_cols = select_display_columns(mun_df, municipality=True)
                 ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
                 st.dataframe(
                     ranked[display_cols],
-                    column_config=_customer_metric_column_config(),
+                    column_config=_area_selection_column_config(),
                     width="stretch",
                     height=420,
                 )
-                st.caption(customer_metric_caption)
-                st.caption(cause_count_caption)
+                st.caption(metrics_caption)
 
     with col_map:
         st.markdown("#### Outage intensity + population")
         st.caption(
-            "Basemap disabled (demo portability). Orange/red disks ≈ unofficial outage visibility count; "
-            "green outline ring ≈ √(2021 population). Hover for counts."
+            "Basemap disabled (demo portability). Disk size ∝ √(unique_outages); "
+            "green outline ring ∝ √(population). Hover for unique-outage metrics."
         )
         show_municipalities = st.checkbox(
             "Overlay top municipalities (region view only)",
@@ -669,8 +641,8 @@ def _area_selection_tab() -> None:
                             "Unique outages (proxy): {unique_outages}",
                             "Avg customers per outage (max): {avg_customers_per_unique_outage}",
                             "Population (approx): {population_2021}",
-                            "Tree-related unique outages: {tree_related_unique_outages}",
-                            "Weather-related unique outages: {weather_related_unique_outages}",
+                            "Tree-related outages: {tree_related_outage_count}",
+                            "Weather-related outages: {weather_related_outage_count}",
                         ]
                     )
                 }

@@ -1,4 +1,4 @@
-region_name,municipality,unique_outages,avg_customers_per_unique_outage,tree_related_unique_outages,weather_related_unique_outages,suggested_priority_score
+region_name,municipality,unique_outages,avg_customers_per_unique_outage,tree_related_outage_count,weather_related_outage_count,suggested_priority_score
 Lower Mainland,Surrey,3651,134.22760887428103,346,301,0.7050527739574444
 Lower Mainland,Vancouver,3985,133.83814303638644,264,163,0.6432486139989877
 South VI,Duncan,2263,97.89615554573577,379,405,0.63668649908282

@@ -1,4 +1,4 @@
-region_name,unique_outages,avg_customers_per_unique_outage,tree_related_unique_outages,weather_related_unique_outages,percent_with_latlon,suggested_priority_score,first_snapshot_date,last_snapshot_date
+region_name,unique_outages,avg_customers_per_unique_outage,tree_related_outage_count,weather_related_outage_count,percent_with_latlon,suggested_priority_score,first_snapshot_date,last_snapshot_date
 Lower Mainland,30315,171.2396833250866,4000,2612,100.0,0.9932955708544472,2024-01-01,2026-05-19
 South VI,9728,156.96864720394737,1905,1709,100.0,0.4351794025467871,2024-01-01,2026-05-19
 North VI,8822,158.5034005894355,1715,1104,100.0,0.3726596984970675,2024-01-01,2026-05-19

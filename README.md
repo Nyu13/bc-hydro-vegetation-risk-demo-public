@@ -104,7 +104,14 @@ streamlit run app.py
 python TMP/scripts/refresh_area_selection_data.py
 ```
 
-Or manually copy `region_summary.csv` and `municipality_summary.csv` into `data/processed/`. The **Area selection** tab ranks regions/municipalities by unofficial snapshot outage counts and overlays approximate 2021 population on the map (no basemap). Customer impact uses **avg customers per outage (max per outage)** — mean of peak `num_customers_out` per unique outage_id. `tree_related_outage_count` and `weather_related_outage_count` count distinct outage_ids with that cause flag on any snapshot row.
+Or manually copy `region_summary.csv` and `municipality_summary.csv` into `data/processed/`. The **Area selection** tab shows **unique-outage metrics only** (not sums of snapshot rows):
+
+- **Counts:** `unique_outages` — distinct `outage_id` values in the archive.
+- **Customer impact:** `avg_customers_per_unique_outage` — mean of peak `num_customers_out` per outage (max across snapshots).
+- **Cause flags:** `tree_related_outage_count` / `weather_related_outage_count` — unique outages with that cause on any snapshot row.
+- **Ranking:** `suggested_priority_score` from the extractor (weighted on the metrics above plus map coverage fractions).
+
+Snapshot-row sums such as `total_customers_affected` or `average_customers_affected` are omitted from the UI. Map disk size scales with √(unique_outages); population rings are context only.
 
 **Top regions by unique outages (bundled snapshot):** Lower Mainland (~30k), South VI (~4.8k), North VI (~4.6k), Northern (~4k), Central Interior (~2.6k), Okanagan/Kootenay (~3.1k), Thompson/Shuswap (~3.1k).
 
