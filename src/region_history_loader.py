@@ -80,6 +80,15 @@ def _customer_metrics_from_history(
     return pd.DataFrame(rows)
 
 
+def _normalize_cause_count_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Coerce deduped unique-outage cause count columns when present."""
+    out = df.copy()
+    for col in ("tree_related_unique_outages", "weather_related_unique_outages"):
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+    return out
+
+
 def _enrich_customer_metrics(df: pd.DataFrame, *, municipality: bool) -> pd.DataFrame:
     if df.empty or all(col in df.columns for col in CUSTOMER_METRIC_COLS):
         return df
@@ -134,7 +143,7 @@ def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
                 df = df.rename(columns={"region": "region_name"})
             if "region_name" not in df.columns:
                 raise ValueError(f"Missing region_name in {path}")
-            df = _enrich_customer_metrics(df, municipality=False)
+            df = _normalize_cause_count_columns(_enrich_customer_metrics(df, municipality=False))
             label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001
@@ -153,7 +162,7 @@ def load_municipality_outage_summary() -> tuple[pd.DataFrame, str]:
                 raise ValueError(f"Missing municipality in {path}")
             if "region_name" not in df.columns and "region" in df.columns:
                 df = df.rename(columns={"region": "region_name"})
-            df = _enrich_customer_metrics(df, municipality=True)
+            df = _normalize_cause_count_columns(_enrich_customer_metrics(df, municipality=True))
             label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001

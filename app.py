@@ -316,13 +316,13 @@ def _customer_metric_column_config() -> dict:
             help="Mean of peak customers_out per unique outage_id (deduped across snapshots).",
             format="%.0f",
         ),
-        "tree_related_outage_count": st.column_config.NumberColumn(
-            "Tree-related outages",
+        "tree_related_unique_outages": st.column_config.NumberColumn(
+            "Tree-related (unique outages)",
             help="Distinct outage_ids with tree/vegetation cause on any snapshot row.",
             format="%.0f",
         ),
-        "weather_related_outage_count": st.column_config.NumberColumn(
-            "Weather-related outages",
+        "weather_related_unique_outages": st.column_config.NumberColumn(
+            "Weather-related (unique outages)",
             help="Distinct outage_ids with weather cause on any snapshot row.",
             format="%.0f",
         ),
@@ -502,8 +502,8 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
                 for c in (
                     "region_name",
                     "unique_outages",
-                    "tree_related_outage_count",
-                    "weather_related_outage_count",
+                    "tree_related_unique_outages",
+                    "weather_related_unique_outages",
                     "suggested_priority_score",
                     "first_snapshot_date",
                     "last_snapshot_date",
@@ -552,6 +552,10 @@ def _area_selection_tab() -> None:
         "**Avg customers per outage (max per outage):** for each unique outage_id, take the peak "
         "`num_customers_out` seen across snapshot rows, then average across outages in that area."
     )
+    cause_count_caption = (
+        "**Tree/weather counts** are unique outages with that cause flag on any snapshot row, "
+        "not sums of snapshot rows."
+    )
     view = st.radio(
         "Rank by",
         ["BC Hydro region", "Municipality (top hotspots)"],
@@ -573,8 +577,8 @@ def _area_selection_tab() -> None:
                         "region_name",
                         "unique_outages",
                         "avg_customers_per_unique_outage",
-                        "tree_related_outage_count",
-                        "weather_related_outage_count",
+                        "tree_related_unique_outages",
+                        "weather_related_unique_outages",
                         "suggested_priority_score",
                     )
                     if c in region_df.columns
@@ -587,6 +591,7 @@ def _area_selection_tab() -> None:
                     height=420,
                 )
                 st.caption(customer_metric_caption)
+                st.caption(cause_count_caption)
         else:
             st.caption(f"Source: {mun_source}")
             if mun_df.empty:
@@ -599,8 +604,8 @@ def _area_selection_tab() -> None:
                         "region_name",
                         "unique_outages",
                         "avg_customers_per_unique_outage",
-                        "tree_related_outage_count",
-                        "weather_related_outage_count",
+                        "tree_related_unique_outages",
+                        "weather_related_unique_outages",
                         "suggested_priority_score",
                     )
                     if c in mun_df.columns
@@ -613,6 +618,7 @@ def _area_selection_tab() -> None:
                     height=420,
                 )
                 st.caption(customer_metric_caption)
+                st.caption(cause_count_caption)
 
     with col_map:
         st.markdown("#### Outage intensity + population")
@@ -663,8 +669,8 @@ def _area_selection_tab() -> None:
                             "Unique outages (proxy): {unique_outages}",
                             "Avg customers per outage (max): {avg_customers_per_unique_outage}",
                             "Population (approx): {population_2021}",
-                            "Tree-related outages: {tree_related_outage_count}",
-                            "Weather-related outages: {weather_related_outage_count}",
+                            "Tree-related unique outages: {tree_related_unique_outages}",
+                            "Weather-related unique outages: {weather_related_unique_outages}",
                         ]
                     )
                 }
