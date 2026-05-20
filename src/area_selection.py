@@ -24,6 +24,12 @@ def load_region_map_context() -> pd.DataFrame:
         return pd.DataFrame(columns=list(cols))
 
 
+# Tighter caps for municipality hotspot view — Metro Vancouver CSDs are close
+# together; region-scale radii (10–22 km) collapse into one blob.
+_MUNICIPALITY_OUTAGE_RADIUS = dict(base_m=2800, min_m=1200, max_m=5500, reference_outages=3500)
+_MUNICIPALITY_POPULATION_RADIUS = dict(base_m=2200, min_m=1000, max_m=5000, reference_pop=400_000)
+
+
 def outage_marker_radius(
     unique_outages: float | int | None,
     *,
@@ -103,12 +109,14 @@ def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
 
     max_out = float(merged["unique_outages"].max())
     merged["outage_radius_m"] = merged["unique_outages"].apply(
-        lambda v: outage_marker_radius(v, base_m=6000, min_m=3500, max_m=18000, reference_outages=1200)
+        lambda v: outage_marker_radius(v, **_MUNICIPALITY_OUTAGE_RADIUS)
     )
     merged["outage_color"] = merged["unique_outages"].apply(
         lambda v: outage_intensity_color(v, max_out)
     )
-    merged["population_radius_m"] = merged["population_2021"].apply(population_marker_radius)
+    merged["population_radius_m"] = merged["population_2021"].apply(
+        lambda p: population_marker_radius(p, **_MUNICIPALITY_POPULATION_RADIUS)
+    )
     if "avg_customers_per_unique_outage" in merged.columns:
         merged["avg_customers_per_unique_outage"] = pd.to_numeric(
             merged["avg_customers_per_unique_outage"], errors="coerce"
