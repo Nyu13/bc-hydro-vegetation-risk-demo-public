@@ -160,14 +160,14 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "fallback_if_unavailable": "data/demo/demo_municipality_population.csv",
         },
         {
-            "dataset": "Region outage summary (2025 unofficial archive)",
+            "dataset": "Region outage summary (unofficial archive)",
             "primary_source_type": "Public proxy (unofficial snapshots)",
             "used_in_demo_for": "Areas-with-most-issues reference table",
             "current_mode": "Bundled demo snapshot or data/processed/region_summary.csv",
             "fallback_if_unavailable": "data/demo/demo_region_outage_summary.csv",
         },
         {
-            "dataset": "Municipality outage summary (2025 unofficial archive)",
+            "dataset": "Municipality outage summary (unofficial archive)",
             "primary_source_type": "Public proxy (unofficial snapshots)",
             "used_in_demo_for": "Area selection — municipality hotspot ranking",
             "current_mode": "Bundled demo snapshot or data/processed/municipality_summary.csv",
@@ -299,6 +299,28 @@ def _render_map_legend(
         f"<strong>Legend</strong>&nbsp;&nbsp;{cells}</div>",
         unsafe_allow_html=True,
     )
+
+
+def _archive_snapshot_range_label(df: pd.DataFrame) -> str:
+    if df.empty or not {"first_snapshot_date", "last_snapshot_date"} <= set(df.columns):
+        return "unofficial archive"
+    start = df["first_snapshot_date"].min()
+    end = df["last_snapshot_date"].max()
+    return f"{start} to {end}, unofficial archive"
+
+
+def _customer_metric_column_config() -> dict:
+    return {
+        "avg_customers_per_unique_outage": st.column_config.NumberColumn(
+            "Avg customers per outage (max per outage)",
+            help="Mean of peak customers_out per unique outage_id (deduped across snapshots).",
+            format="%.0f",
+        ),
+        "median_customers_per_outage": st.column_config.NumberColumn(
+            "Median customers per outage",
+            format="%.0f",
+        ),
+    }
 
 
 def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd.DataFrame) -> None:
@@ -456,7 +478,10 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         "Population is context only — not used in the demo risk score."
     )
 
-    with st.expander("2025 unofficial outage history — regions with most visible issues (proxy)"):
+    with st.expander(
+        f"Unofficial outage history ({_archive_snapshot_range_label(region_history_df)}) — "
+        "regions with most visible issues (proxy)"
+    ):
         st.caption(
             "Snapshot-based counts from the unofficial public archive (not BC Hydro–validated). "
             "Copy `region_summary.csv` from the outage-history extractor to `data/processed/` "
@@ -499,12 +524,28 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
 
 def _area_selection_tab() -> None:
     st.subheader("Area selection (PoC)")
-    st.warning(
-        "Unofficial outage snapshot counts (2025+ public archive proxy) — not BC Hydro–validated event history. "
-        "Population figures are approximate or municipality-level 2021 Census subsets for context only."
-    )
     region_df, region_source = load_region_outage_summary()
     mun_df, mun_source = load_municipality_outage_summary()
+
+    archive_range = "public archive proxy"
+    if not region_df.empty and {
+        "first_snapshot_date",
+        "last_snapshot_date",
+    } <= set(region_df.columns):
+        start = region_df["first_snapshot_date"].min()
+        end = region_df["last_snapshot_date"].max()
+        archive_range = f"{start} to {end}, public archive proxy"
+
+    st.warning(
+        f"Unofficial outage snapshot counts ({archive_range}) — not BC Hydro–validated event history. "
+        "Population figures are approximate or municipality-level 2021 Census subsets for context only."
+    )
+
+    customer_metric_caption = (
+        "**Avg customers per outage (max per outage):** for each unique outage_id, take the peak "
+        "`num_customers_out` seen across snapshot rows, then average across outages in that area. "
+        "Unlike summing snapshot rows, this stays below regional population and reflects typical outage size."
+    )
 
     view = st.radio(
         "Rank by",
@@ -526,14 +567,21 @@ def _area_selection_tab() -> None:
                     for c in (
                         "region_name",
                         "unique_outages",
-                        "total_customers_affected",
+                        "avg_customers_per_unique_outage",
+                        "median_customers_per_outage",
                         "tree_related_outage_count",
                         "suggested_priority_score",
                     )
                     if c in region_df.columns
                 ]
                 ranked = region_df.sort_values("unique_outages", ascending=False)
-                st.dataframe(ranked[display_cols], width="stretch", height=420)
+                st.dataframe(
+                    ranked[display_cols],
+                    column_config=_customer_metric_column_config(),
+                    width="stretch",
+                    height=420,
+                )
+                st.caption(customer_metric_caption)
         else:
             st.caption(f"Source: {mun_source}")
             if mun_df.empty:
@@ -545,13 +593,19 @@ def _area_selection_tab() -> None:
                         "municipality",
                         "region_name",
                         "unique_outages",
-                        "total_customers_affected",
+                        "avg_customers_per_unique_outage",
                         "suggested_priority_score",
                     )
                     if c in mun_df.columns
                 ]
                 ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
-                st.dataframe(ranked[display_cols], width="stretch", height=420)
+                st.dataframe(
+                    ranked[display_cols],
+                    column_config=_customer_metric_column_config(),
+                    width="stretch",
+                    height=420,
+                )
+                st.caption(customer_metric_caption)
 
     with col_map:
         st.markdown("#### Outage intensity + population")
@@ -600,7 +654,7 @@ def _area_selection_tab() -> None:
                         [
                             "Region: {region_name}",
                             "Unique outages (proxy): {unique_outages}",
-                            "Customers affected (sum proxy): {total_customers_affected}",
+                            "Avg customers per outage (max): {avg_customers_per_unique_outage}",
                             "Population (approx): {population_2021}",
                             "Tree-related (proxy): {tree_related_outage_count}",
                         ]
@@ -641,7 +695,7 @@ def _area_selection_tab() -> None:
                             "Municipality: {municipality}",
                             "Region: {region_name}",
                             "Unique outages (proxy): {unique_outages}",
-                            "Customers affected (sum proxy): {total_customers_affected}",
+                            "Avg customers per outage (max): {avg_customers_per_unique_outage}",
                             "Population (2021): {population_2021}",
                         ]
                     )

@@ -69,10 +69,14 @@ def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
         lambda v: outage_intensity_color(v, max_out)
     )
     merged["population_radius_m"] = merged["population_2021"].apply(population_marker_radius)
-    if "total_customers_affected" in merged.columns:
-        merged["total_customers_affected"] = pd.to_numeric(
-            merged["total_customers_affected"], errors="coerce"
-        ).fillna(0).astype(int)
+    if "avg_customers_per_unique_outage" in merged.columns:
+        merged["avg_customers_per_unique_outage"] = pd.to_numeric(
+            merged["avg_customers_per_unique_outage"], errors="coerce"
+        ).fillna(0).round(1)
+    if "median_customers_per_outage" in merged.columns:
+        merged["median_customers_per_outage"] = pd.to_numeric(
+            merged["median_customers_per_outage"], errors="coerce"
+        ).fillna(0).round(1)
     return merged, source
 
 
@@ -105,4 +109,8 @@ def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
         lambda v: outage_intensity_color(v, max_out)
     )
     merged["population_radius_m"] = merged["population_2021"].apply(population_marker_radius)
+    if "avg_customers_per_unique_outage" in merged.columns:
+        merged["avg_customers_per_unique_outage"] = pd.to_numeric(
+            merged["avg_customers_per_unique_outage"], errors="coerce"
+        ).fillna(0).round(1)
     return merged

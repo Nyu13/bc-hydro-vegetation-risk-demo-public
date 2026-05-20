@@ -12,18 +12,115 @@ LOGGER = logging.getLogger(__name__)
 
 REGION_SUMMARY_FILENAME = "region_summary.csv"
 MUNICIPALITY_SUMMARY_FILENAME = "municipality_summary.csv"
+HISTORY_FILENAME = "bchydro_public_outages_history.parquet"
 DEMO_REGION_SUMMARY_FILENAME = "demo_region_outage_summary.csv"
 DEMO_MUNICIPALITY_SUMMARY_FILENAME = "demo_municipality_outage_summary.csv"
 
+CUSTOMER_METRIC_COLS = (
+    "avg_customers_per_unique_outage",
+    "median_customers_per_outage",
+    "average_customers_affected",
+)
 
-def _candidate_paths() -> list[Path]:
+
+def _candidate_paths(filename: str, demo_filename: str) -> list[Path]:
     paths: list[Path] = []
     env_dir = os.getenv("EXTRACTOR_OUTPUT_DIR", "").strip()
     if env_dir:
-        paths.append(Path(env_dir) / REGION_SUMMARY_FILENAME)
-    paths.append(PROCESSED_DATA_DIR / REGION_SUMMARY_FILENAME)
-    paths.append(DEMO_DATA_DIR / DEMO_REGION_SUMMARY_FILENAME)
+        paths.append(Path(env_dir) / filename)
+    paths.append(PROCESSED_DATA_DIR / filename)
+    paths.append(DEMO_DATA_DIR / demo_filename)
     return paths
+
+
+def _history_candidate_paths() -> list[Path]:
+    paths: list[Path] = []
+    env_dir = os.getenv("EXTRACTOR_OUTPUT_DIR", "").strip()
+    if env_dir:
+        paths.append(Path(env_dir) / HISTORY_FILENAME)
+    paths.append(PROCESSED_DATA_DIR / HISTORY_FILENAME)
+    default_extractor = Path(r"C:\workspace\bchydro-outage-history-extractor\data\processed")
+    paths.append(default_extractor / HISTORY_FILENAME)
+    return paths
+
+
+def _load_history_parquet() -> pd.DataFrame | None:
+    for path in _history_candidate_paths():
+        if not path.is_file():
+            continue
+        try:
+            return pd.read_parquet(path)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Could not read history at %s: %s", path, exc)
+    return None
+
+
+def _max_customers_per_outage(grp: pd.DataFrame) -> pd.Series:
+    if "outage_id" in grp.columns and grp["outage_id"].notna().any():
+        return grp.groupby("outage_id", dropna=True)["num_customers_out"].max().fillna(0)
+    deduped = grp.drop_duplicates(subset=["gis_id", "date_off", "area", "cause"])
+    return deduped["num_customers_out"].fillna(0)
+
+
+def _customer_metrics_from_history(
+    history_df: pd.DataFrame,
+    group_cols: list[str],
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for keys, grp in history_df.groupby(group_cols, dropna=False):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        per_outage = _max_customers_per_outage(grp)
+        customers = grp["num_customers_out"].fillna(0)
+        row = dict(zip(group_cols, keys))
+        row["avg_customers_per_unique_outage"] = (
+            float(per_outage.mean()) if len(per_outage) else 0.0
+        )
+        row["median_customers_per_outage"] = (
+            float(per_outage.median()) if len(per_outage) else 0.0
+        )
+        row["average_customers_affected"] = float(customers.mean()) if len(customers) else 0.0
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _enrich_customer_metrics(df: pd.DataFrame, *, municipality: bool) -> pd.DataFrame:
+    if df.empty or all(col in df.columns for col in CUSTOMER_METRIC_COLS):
+        return df
+
+    history_df = _load_history_parquet()
+    if history_df is None or "num_customers_out" not in history_df.columns:
+        return df
+
+    group_cols = ["region_name", "municipality"] if municipality else ["region_name"]
+    if municipality and "municipality" not in history_df.columns:
+        return df
+    if "region_name" not in history_df.columns and "region" in history_df.columns:
+        history_df = history_df.rename(columns={"region": "region_name"})
+
+    metrics = _customer_metrics_from_history(history_df, group_cols)
+    merge_cols = [c for c in group_cols if c in df.columns]
+    if not merge_cols:
+        return df
+
+    enriched = df.merge(metrics, on=merge_cols, how="left", suffixes=("", "_computed"))
+    for col in CUSTOMER_METRIC_COLS:
+        computed = f"{col}_computed"
+        if col not in enriched.columns and computed in enriched.columns:
+            enriched[col] = enriched[computed]
+        elif col in enriched.columns and computed in enriched.columns:
+            enriched[col] = enriched[col].fillna(enriched[computed])
+        if computed in enriched.columns:
+            enriched = enriched.drop(columns=[computed])
+    return enriched
+
+
+def _source_label(path: Path, *, bundled_demo: bool) -> str:
+    if path.parent == PROCESSED_DATA_DIR or os.getenv("EXTRACTOR_OUTPUT_DIR"):
+        return "extractor processed output"
+    if bundled_demo:
+        return "bundled demo snapshot (unofficial archive)"
+    return "bundled demo snapshot (top municipalities)"
 
 
 def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
@@ -32,7 +129,7 @@ def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
 
     Returns (dataframe, source_label).
     """
-    for path in _candidate_paths():
+    for path in _candidate_paths(REGION_SUMMARY_FILENAME, DEMO_REGION_SUMMARY_FILENAME):
         if not path.is_file():
             continue
         try:
@@ -41,30 +138,17 @@ def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
                 df = df.rename(columns={"region": "region_name"})
             if "region_name" not in df.columns:
                 raise ValueError(f"Missing region_name in {path}")
-            label = (
-                "extractor processed output"
-                if path.parent == PROCESSED_DATA_DIR or os.getenv("EXTRACTOR_OUTPUT_DIR")
-                else "bundled demo snapshot (2025 unofficial archive)"
-            )
+            df = _enrich_customer_metrics(df, municipality=False)
+            label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Could not read region summary at %s: %s", path, exc)
     return pd.DataFrame(), "not loaded"
 
 
-def _municipality_candidate_paths() -> list[Path]:
-    paths: list[Path] = []
-    env_dir = os.getenv("EXTRACTOR_OUTPUT_DIR", "").strip()
-    if env_dir:
-        paths.append(Path(env_dir) / MUNICIPALITY_SUMMARY_FILENAME)
-    paths.append(PROCESSED_DATA_DIR / MUNICIPALITY_SUMMARY_FILENAME)
-    paths.append(DEMO_DATA_DIR / DEMO_MUNICIPALITY_SUMMARY_FILENAME)
-    return paths
-
-
 def load_municipality_outage_summary() -> tuple[pd.DataFrame, str]:
     """Load municipality-level outage summary from extractor or bundled demo snapshot."""
-    for path in _municipality_candidate_paths():
+    for path in _candidate_paths(MUNICIPALITY_SUMMARY_FILENAME, DEMO_MUNICIPALITY_SUMMARY_FILENAME):
         if not path.is_file():
             continue
         try:
@@ -73,11 +157,8 @@ def load_municipality_outage_summary() -> tuple[pd.DataFrame, str]:
                 raise ValueError(f"Missing municipality in {path}")
             if "region_name" not in df.columns and "region" in df.columns:
                 df = df.rename(columns={"region": "region_name"})
-            label = (
-                "extractor processed output"
-                if path.parent == PROCESSED_DATA_DIR or os.getenv("EXTRACTOR_OUTPUT_DIR")
-                else "bundled demo snapshot (top municipalities)"
-            )
+            df = _enrich_customer_metrics(df, municipality=True)
+            label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
             return df, f"{path.name} ({label})"
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Could not read municipality summary at %s: %s", path, exc)
