@@ -30,8 +30,14 @@ from src.region_history_loader import (
     select_display_columns,
 )
 from src.area_selection import (
+    default_area_map_view_state,
+    fit_area_map_view_state,
+    lookup_municipality_coordinates,
+    lookup_region_coordinates,
     prepare_municipality_hotspot_map_df,
     prepare_region_hotspot_map_df,
+    selected_marker_layer,
+    selection_area_map_view_state,
 )
 from src.risk_scoring import (
     assign_risk_level,
@@ -528,6 +534,60 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
             )
 
 
+def _area_hotspot_map_layers(map_df: pd.DataFrame, *, municipality: bool) -> list[pdk.Layer]:
+    del municipality  # same layer stack; tooltips differ
+    return [
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=map_df,
+            get_position="[lon, lat]",
+            get_fill_color="outage_color",
+            get_radius="outage_radius_m",
+            pickable=True,
+        ),
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=map_df,
+            get_position="[lon, lat]",
+            get_radius="population_radius_m",
+            filled=False,
+            stroked=True,
+            get_line_color=[40, 167, 69, 220],
+            line_width_min_pixels=3,
+            pickable=False,
+        ),
+    ]
+
+
+def _area_region_map_tooltip() -> dict[str, str]:
+    return {
+        "text": "\n".join(
+            [
+                "Region: {region_name}",
+                "Unique outages (proxy): {unique_outages}",
+                "Avg customers per outage (max): {avg_customers_per_unique_outage}",
+                "Population (approx): {population_2021}",
+                "Tree-related outages: {tree_related_outage_count}",
+                "Weather-related outages: {weather_related_outage_count}",
+            ]
+        )
+    }
+
+
+def _area_municipality_map_tooltip() -> dict[str, str]:
+    return {
+        "text": "\n".join(
+            [
+                "Municipality: {municipality}",
+                "Region: {region_name}",
+                "Unique outages (proxy): {unique_outages}",
+                "Avg customers per outage (max): {avg_customers_per_unique_outage}",
+                "Population (2021): {population_2021}",
+            ]
+        )
+    }
+
+
 def _area_selection_tab() -> None:
     st.subheader("Area selection (PoC)")
     region_df, region_source = load_region_outage_summary()
@@ -558,39 +618,58 @@ def _area_selection_tab() -> None:
         ["BC Hydro region", "Municipality (top hotspots)"],
         horizontal=True,
     )
+    is_region_view = view == "BC Hydro region"
+    ranked = pd.DataFrame()
+    display_cols: list[str] = []
+    table_source = region_source if is_region_view else mun_source
+
+    if is_region_view:
+        if not region_df.empty:
+            display_cols = select_display_columns(region_df, municipality=False)
+            ranked = region_df.sort_values("unique_outages", ascending=False)
+    elif not mun_df.empty:
+        display_cols = select_display_columns(mun_df, municipality=True)
+        ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
 
     col_table, col_map = st.columns([1, 1.35])
+    table_state = None
 
     with col_table:
         st.markdown("#### Ranked areas")
-        if view == "BC Hydro region":
-            st.caption(f"Source: {region_source}")
-            if region_df.empty:
-                st.info("No region summary available.")
-            else:
-                display_cols = select_display_columns(region_df, municipality=False)
-                ranked = region_df.sort_values("unique_outages", ascending=False)
-                st.dataframe(
-                    ranked[display_cols],
-                    column_config=_area_selection_column_config(),
-                    width="stretch",
-                    height=420,
-                )
-                st.caption(metrics_caption)
+        st.caption(f"Source: {table_source}")
+        if ranked.empty:
+            st.info(
+                "No region summary available."
+                if is_region_view
+                else "No municipality summary available."
+            )
         else:
-            st.caption(f"Source: {mun_source}")
-            if mun_df.empty:
-                st.info("No municipality summary available.")
-            else:
-                display_cols = select_display_columns(mun_df, municipality=True)
-                ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
-                st.dataframe(
-                    ranked[display_cols],
-                    column_config=_area_selection_column_config(),
-                    width="stretch",
-                    height=420,
-                )
-                st.caption(metrics_caption)
+            st.caption("Click a row to zoom the map to that area.")
+            table_state = st.dataframe(
+                ranked[display_cols],
+                column_config=_area_selection_column_config(),
+                width="stretch",
+                height=420,
+                on_select="rerun",
+                selection_mode="single-row",
+                key=f"area_selection_table_{view}",
+            )
+            st.caption(metrics_caption)
+
+    selected_id: str | None = None
+    selected_coords: tuple[float, float] | None = None
+    missing_coords = False
+    if table_state is not None and table_state.selection.rows:
+        row_idx = table_state.selection.rows[0]
+        row = ranked.iloc[row_idx]
+        if is_region_view:
+            selected_id = str(row["region_name"])
+            selected_coords = lookup_region_coordinates(selected_id)
+        else:
+            selected_id = str(row["municipality"])
+            selected_coords = lookup_municipality_coordinates(selected_id)
+        if selected_coords is None:
+            missing_coords = True
 
     with col_map:
         st.markdown("#### Outage intensity + population")
@@ -598,96 +677,40 @@ def _area_selection_tab() -> None:
             "Basemap disabled (demo portability). Disk size ∝ √(unique_outages); "
             "green outline ring ∝ √(population). Hover for unique-outage metrics."
         )
+        if missing_coords and selected_id:
+            st.info(
+                f"No map coordinates for **{selected_id}** in the demo population file. "
+                "Map view unchanged — select another row or use region view."
+            )
         show_municipalities = st.checkbox(
             "Overlay top municipalities (region view only)",
             value=False,
-            disabled=view != "BC Hydro region",
+            disabled=not is_region_view,
         )
 
         layers: list[pdk.Layer] = []
         tooltip: dict[str, str] = {"text": "No data"}
-        if view == "BC Hydro region":
+        map_df = pd.DataFrame()
+        map_id_column = "region_name"
+
+        if is_region_view:
             map_df, _ = prepare_region_hotspot_map_df()
             if map_df.empty:
                 st.info("Could not build region map (missing summary or centroids).")
             else:
-                layers.append(
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=map_df,
-                        get_position="[lon, lat]",
-                        get_fill_color="outage_color",
-                        get_radius="outage_radius_m",
-                        pickable=True,
-                    )
-                )
-                layers.append(
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=map_df,
-                        get_position="[lon, lat]",
-                        get_radius="population_radius_m",
-                        filled=False,
-                        stroked=True,
-                        get_line_color=[40, 167, 69, 220],
-                        line_width_min_pixels=3,
-                        pickable=False,
-                    )
-                )
-                tooltip = {
-                    "text": "\n".join(
-                        [
-                            "Region: {region_name}",
-                            "Unique outages (proxy): {unique_outages}",
-                            "Avg customers per outage (max): {avg_customers_per_unique_outage}",
-                            "Population (approx): {population_2021}",
-                            "Tree-related outages: {tree_related_outage_count}",
-                            "Weather-related outages: {weather_related_outage_count}",
-                        ]
-                    )
-                }
-        elif view == "Municipality (top hotspots)":
+                layers.extend(_area_hotspot_map_layers(map_df, municipality=False))
+                tooltip = _area_region_map_tooltip()
+        else:
             map_df = prepare_municipality_hotspot_map_df(limit=25)
+            map_id_column = "municipality"
             if map_df.empty:
                 st.info("No municipality rows with map coordinates.")
                 tooltip = {"text": "No data"}
             else:
-                layers.append(
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=map_df,
-                        get_position="[lon, lat]",
-                        get_fill_color="outage_color",
-                        get_radius="outage_radius_m",
-                        pickable=True,
-                    )
-                )
-                layers.append(
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=map_df,
-                        get_position="[lon, lat]",
-                        get_radius="population_radius_m",
-                        filled=False,
-                        stroked=True,
-                        get_line_color=[40, 167, 69, 220],
-                        line_width_min_pixels=3,
-                        pickable=False,
-                    )
-                )
-                tooltip = {
-                    "text": "\n".join(
-                        [
-                            "Municipality: {municipality}",
-                            "Region: {region_name}",
-                            "Unique outages (proxy): {unique_outages}",
-                            "Avg customers per outage (max): {avg_customers_per_unique_outage}",
-                            "Population (2021): {population_2021}",
-                        ]
-                    )
-                }
+                layers.extend(_area_hotspot_map_layers(map_df, municipality=True))
+                tooltip = _area_municipality_map_tooltip()
 
-        if show_municipalities and view == "BC Hydro region":
+        if show_municipalities and is_region_view:
             mun_map = prepare_municipality_hotspot_map_df(limit=15)
             if not mun_map.empty:
                 layers.append(
@@ -701,10 +724,25 @@ def _area_selection_tab() -> None:
                     )
                 )
 
+        highlight = selected_marker_layer(map_df, map_id_column, selected_id)
+        if highlight is not None:
+            layers.append(highlight)
+
+        if selected_coords is not None:
+            view_state = selection_area_map_view_state(
+                selected_coords[0],
+                selected_coords[1],
+                municipality=not is_region_view,
+            )
+        elif not map_df.empty:
+            view_state = fit_area_map_view_state(map_df)
+        else:
+            view_state = default_area_map_view_state()
+
         if layers:
             deck = pdk.Deck(
                 map_style=None,
-                initial_view_state=pdk.ViewState(latitude=53.5, longitude=-124.5, zoom=4.5),
+                initial_view_state=view_state,
                 layers=layers,
                 tooltip=tooltip,
             )
