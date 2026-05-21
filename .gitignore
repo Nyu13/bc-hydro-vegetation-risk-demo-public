@@ -29,6 +29,9 @@ data/*.zip
 # Full BC/Montreal KML exports (loader stubs and vector dumps stay local)
 data/*.kml
 
+# TMP scratch (WFS caps, test exports)
+TMP/temp/
+
 # OS/Editor
 .DS_Store
 Thumbs.db

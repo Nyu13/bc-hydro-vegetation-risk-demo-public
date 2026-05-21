@@ -46,7 +46,7 @@
 Regenerate sample:
 
 ```bash
-python TMP/scripts/export_bc_transmission_sample.py --lower-mainland
+python TMP/scripts/download_bc_transmission_sample.py
 ```
 
 **Caveats:** Public layer is a **province-wide HV transmission proxy**, not BC Hydro distribution/feeder GIS. Voltage and owner fields are often suppressed in the public release. Demo corridor risk scores remain **synthetic** (`demo_corridors.csv`).
@@ -64,46 +64,11 @@ python TMP/scripts/export_bc_transmission_sample.py --lower-mainland
 | Dataset (FR) | Lignes de transport électrique |
 | Publisher | Ville de Montréal — Division de la géomatique |
 | Portal | [donnees.montreal.ca](https://donnees.montreal.ca/en/dataset/lignes-transport-electrique) |
-| Canada open data | [ouvert.canada.ca](https://ouvert.canada.ca/data/fr/dataset/ac3515d6-2753-47a5-8575-35be7d127f43) |
 | License | Creative Commons Attribution 4.0 (CC-BY 4.0) |
-| Vintage | Aerial photography 2020 (Communauté métropolitaine de Montréal — CMM) |
-| CRS (source) | EPSG:2950 (MTM zone 8, NAD83) — reprojected to WGS84 (EPSG:4326) in the demo bundle |
-| Bundled sample | `data/demo/demo_montreal_transmission_lines_sample.geojson` (~108 KB, 160 aerial line features) |
-| Local full copy (gitignored) | `data/lignes-transport-electrique-2020.gpkg` / `.zip` (~0.9 MB / ~0.2 MB) |
+| Bundled sample | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
+| Local full copy (gitignored) | `data/lignes-transport-electrique-2020.gpkg` / `.zip` |
 
-### GPKG layers (local file)
-
-| Layer | Geometry | Rows (2020 file) | Role |
-| --- | --- | --- | --- |
-| `carto_ser_ele_tel_aerien` | MultiLineString | 160 | Suspended HV conductors (pylon-to-pylon symbolization) — **used in demo map overlay** |
-| `carto_ser_electricite` | MultiPolygon | 1005 | Concrete bases supporting conductors (not drawn in demo) |
-
-### Key attributes (`carto_ser_ele_tel_aerien`)
-
-- `ID` — feature identifier (exported as `line_id` in GeoJSON)
-- `SOURCE` — e.g. `Photo aérienne 2020, CMM`
-- `TRAITEMENT` — photogrammetry (stereo)
-- `DIFFUSEUR` — `Division de la géomatique, Ville de Montréal`
-- `EQM`, `VERSION` — planimetric/altimetric quality metadata
-
-### WGS84 extent (sample)
-
-Approximately lon −73.96 to −73.48, lat 45.40 to 45.70 (greater Montréal). **Does not overlap British Columbia.**
-
-### Regenerating the bundled sample
-
-Place the official GPKG at `data/lignes-transport-electrique-2020.gpkg`, then:
-
-```bash
-python TMP/scripts/export_montreal_transmission_sample.py
-```
-
-### Recommended use in this demo
-
-- **UI label** explicitly states Montréal / Québec reference — never “BC Hydro lines”.
-- Optional **Risk Map** toggle draws orange paths for workflow discussion only — **off by default**.
-- **Do not** spatially join to BC Hydro outage polygons or BC demo corridor centroids.
-- For BC outage/vegetation context, use **BC transmission lines** (section above), not this dataset.
+Regenerate: `python TMP/scripts/export_montreal_transmission_sample.py`. Map checkbox is separate from BC lines — off by default.
 
 ## Weather
 

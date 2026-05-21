@@ -1,18 +1,8 @@
 # BC public transmission lines — download guide
 
-Use this guide when the demo needs **British Columbia** HV line geometry for outage / vegetation workflow discussion. It is **not** the Montréal dataset (`lignes-transport-electrique-2020`).
+Use this guide when the demo needs **British Columbia** HV line geometry for outage / vegetation workflow discussion.
 
-## BC vs Montréal — do not mix
-
-| | **BC (this guide)** | **Montréal (wrong for BC demo)** |
-| --- | --- | --- |
-| Coverage | Province of British Columbia | Montréal metropolitan area, Québec |
-| Authority | BC Geographic Warehouse / DataBC | Ville de Montréal |
-| Layer / file | `WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP` | `lignes-transport-electrique-2020.gpkg` |
-| Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
-| Map checkbox | “Show BC transmission lines…” | “Show Montréal HV transmission lines…” |
-
-Montréal lines are near lon −74°, lat 45.7°. BC lines are near lon −123°, lat 49°+. They do not overlap.
+Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson` · Map toggle: “Show BC transmission lines…”
 
 ## Metadata URLs (Geo.ca / CSW)
 
@@ -119,7 +109,7 @@ Official how-to: [DataBC WMS/WFS getting started](https://bcgov.github.io/data-p
 | Blocker | Symptom | Mitigation |
 | --- | --- | --- |
 | Corporate firewall / proxy | Timeout or TLS errors to `openmaps.gov.bc.ca`, `delivery.maps.gov.bc.ca` | Use bundled `data/demo/demo_bc_transmission_lines_sample.geojson`; run download script from an unrestricted network; ask IT to allow DataBC hosts |
-| No GDAL on Windows | `ogr2ogr` not found | Use `python TMP/scripts/export_bc_transmission_sample.py` (geopandas + requests) |
+| No GDAL on Windows | `ogr2ogr` not found | Use `python TMP/scripts/download_bc_transmission_sample.py` (geopandas + requests) |
 | Wrong bbox CRS | WFS returns 0 features for Vancouver | Use EPSG:3005 bbox (script handles conversion) |
 | WFS `count` cap | Partial province in one request | Paginate with `startIndex` or download full layer via catalogue order |
 | Public attribute limits | `VOLTAGE`, `OWNER` often null | Expected per BC Hydro publication agreement; not a bug |
@@ -129,7 +119,7 @@ Official how-to: [DataBC WMS/WFS getting started](https://bcgov.github.io/data-p
 
 - Toggle: **Show BC transmission lines (BC Geographic Warehouse — reference overlay)** on Risk Map / Area selection.
 - Default off; demo corridor markers remain **synthetic** (`demo_corridors.csv`).
-- Do not spatially join Montréal geometry to BC outage polygons.
+- Do not treat public HV lines as BC Hydro feeder topology or join them to outage polygons without validation.
 
 ## Regenerating the bundled sample
 
