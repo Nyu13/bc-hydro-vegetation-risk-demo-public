@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import (
+    BC_TRANSMISSION_GEOJSON,
+    BC_TRANSMISSION_KML,
     DEMO_DATA_DIR,
     MONTREAL_TRANSMISSION_GEOJSON,
     MONTREAL_TRANSMISSION_GPKG,
@@ -17,6 +19,9 @@ LOGGER = logging.getLogger(__name__)
 MONTREAL_TRANSMISSION_LAYER = "carto_ser_ele_tel_aerien"
 MONTREAL_TRANSMISSION_UI_LABEL = (
     "Show Montréal HV transmission lines (Ville de Montréal 2020 — Québec, not BC)"
+)
+BC_TRANSMISSION_UI_LABEL = (
+    "Show BC transmission lines (BC Geographic Warehouse — reference overlay)"
 )
 
 
@@ -60,6 +65,43 @@ def _geometry_to_paths(geom: dict) -> list[list[list[float]]]:
     return []
 
 
+def load_bc_transmission_paths() -> pd.DataFrame:
+    """
+    Load bundled BC Geographic Warehouse transmission line paths for optional map overlay.
+
+    Returns DataFrame columns: path (list of [lon, lat]), line_id, dataset_note.
+    Geographic coverage: British Columbia (WGS84 approx. 48–59°N, 114–132°W).
+    Reference geometry only — demo corridor risk markers remain synthetic.
+    """
+    geojson_path = BC_TRANSMISSION_GEOJSON
+    if not geojson_path.exists():
+        LOGGER.warning("BC transmission sample missing: %s", geojson_path)
+        return pd.DataFrame()
+
+    try:
+        with geojson_path.open(encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error("Failed to read BC transmission GeoJSON: %s", exc)
+        return pd.DataFrame()
+
+    rows: list[dict] = []
+    for feature in payload.get("features", []):
+        props = feature.get("properties") or {}
+        geom = feature.get("geometry") or {}
+        line_id = props.get("line_id", props.get("TRANSMISSION_LINE_ID"))
+        note = props.get(
+            "dataset_note",
+            "BC Geographic Warehouse transmission lines — reference overlay (not feeder GIS).",
+        )
+        for path in _geometry_to_paths(geom):
+            rows.append({"path": path, "line_id": line_id, "dataset_note": note})
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 def load_montreal_transmission_paths() -> pd.DataFrame:
     """
     Load bundled Montréal metro HV line paths for optional map overlay.
@@ -94,6 +136,10 @@ def load_montreal_transmission_paths() -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
+
+
+def bc_transmission_kml_available() -> bool:
+    return BC_TRANSMISSION_KML.exists()
 
 
 def montreal_transmission_gpkg_available() -> bool:

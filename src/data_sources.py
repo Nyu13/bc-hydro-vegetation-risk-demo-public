@@ -24,12 +24,15 @@ DATA_SOURCES = [
         "notes": "Unofficial archive; not provided or validated by BC Hydro.",
     },
     {
-        "name": "Geo.ca BC Transmission Lines",
+        "name": "BC Geographic Warehouse — BC Transmission Lines",
         "url": "https://www.app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a",
-        "classification": "Public proxy",
-        "type": "Public transmission geometry proxy",
+        "classification": "Public reference",
+        "type": "Optional HV line overlay — British Columbia (WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP)",
         "formal_poc_replacement": "BC Hydro feeder/circuit topology and protected corridor models",
-        "notes": "Transmission proxy only; not distribution feeder topology.",
+        "notes": (
+            "Bundled WGS84 sample in data/demo/demo_bc_transmission_lines_sample.geojson. "
+            "Reference underlay only; demo_corridors.csv remains synthetic risk points."
+        ),
     },
     {
         "name": "Ville de Montréal — Lignes de transport électrique (2020)",

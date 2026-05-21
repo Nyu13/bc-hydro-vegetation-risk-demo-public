@@ -1,5 +1,16 @@
 # Data Sources
 
+## BC vs Montréal transmission geometry (read this first)
+
+| Question | **Use BC sources below** | **Do not use for BC demo** |
+| --- | --- | --- |
+| Jurisdiction | British Columbia | Montréal, Québec only |
+| File to avoid confusing | `WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP` | `lignes-transport-electrique-2020.gpkg` / `.zip` |
+| Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
+| Map extent (WGS84) | ~−123°, 49° (Lower Mainland sample) | ~−74°, 45.7° |
+
+**Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md)
+
 ## Public Outage Sources
 
 - BC Hydro outage map JSON: [https://www.bchydro.com/power-outages/app/outages-map-data.json](https://www.bchydro.com/power-outages/app/outages-map-data.json)
@@ -12,8 +23,33 @@
 
 ## Network / Corridor Proxy (BC demo)
 
-- Geo.ca BC Transmission Lines dataset record: [https://www.app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a](https://www.app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a)
-- Demo corridor markers and scores use **synthetic** `data/demo/demo_corridors.csv` — not live BC line geometry.
+### BC transmission lines (recommended for this project)
+
+| Field | Value |
+| --- | --- |
+| Dataset | BC Transmission Lines |
+| Publisher | Province of BC — BC Geographic Warehouse (DataBC) |
+| Catalogue | [catalogue.data.gov.bc.ca/dataset/bc-transmission-lines](https://catalogue.data.gov.bc.ca/dataset/bc-transmission-lines) |
+| Geo.ca | [384d551b-dee1-4df8-8148-b3fcf865096a](https://app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a) |
+| Open Government | [open.canada.ca dataset](https://open.canada.ca/data/en/dataset/384d551b-dee1-4df8-8148-b3fcf865096a) |
+| WFS layer | `pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP` |
+| WFS URL | `https://openmaps.gov.bc.ca/geo/pub/wfs` |
+| ArcGIS layer | [whse/bcgw_pub_whse_basemapping MapServer /77](https://delivery.maps.gov.bc.ca/arcgis/rest/services/whse/bcgw_pub_whse_basemapping/MapServer/77) |
+| Licence | Open Government Licence – British Columbia |
+| Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` (~140 KB, 120 lines, Lower Mainland bbox) |
+| Local full copy (gitignored) | `data/raw/bc_transmission_lines_full.geojson`, `data/*.kml` loader stub |
+
+Regenerate sample:
+
+```bash
+python TMP/scripts/download_bc_transmission_sample.py
+```
+
+**Caveats:** Public layer is a **province-wide HV transmission proxy**, not BC Hydro distribution/feeder GIS. Voltage and owner fields are often suppressed in the public release. Demo corridor risk scores remain **synthetic** (`demo_corridors.csv`).
+
+### Synthetic demo corridors (default risk map)
+
+- `data/demo/demo_corridors.csv` — illustrative corridor centroids/scores, not derived from live BC line geometry.
 
 ## Optional reference: Ville de Montréal transmission lines (2020)
 
@@ -61,9 +97,9 @@ python TMP/scripts/export_montreal_transmission_sample.py
 ### Recommended use in this demo
 
 - **UI label** explicitly states Montréal / Québec reference — never “BC Hydro lines”.
-- Optional **Risk Map** and **Area selection** toggles draw orange `PathLayer` paths for workflow discussion (line–vegetation proximity, satellite context). They are **off by default**.
-- **Do not** spatially join to BC Hydro outage polygons or BC demo corridor centroids — different jurisdiction and CRS context; outage archive is BC-only proxy.
-- For a formal BC PoC, replace with BC Hydro internal feeder/corridor GIS or the Geo.ca BC transmission proxy above.
+- Optional **Risk Map** toggle draws orange paths for workflow discussion only — **off by default**.
+- **Do not** spatially join to BC Hydro outage polygons or BC demo corridor centroids.
+- For BC outage/vegetation context, use **BC transmission lines** (section above), not this dataset.
 
 ## Weather
 
@@ -78,7 +114,7 @@ python TMP/scripts/export_montreal_transmission_sample.py
 ## Notes
 
 - All listed sources are public/proxy for this demo.
-- Formal PoC should use BC Hydro internal operational and asset datasets.
+- Formal PoC should use BC Hydro internal operational and asset datasets (see [bc_hydro_internal_data_needed.md](bc_hydro_internal_data_needed.md)).
 - Unofficial snapshot data is not BC Hydro-provided and should be treated as non-authoritative proxy input.
 - Demo outputs are illustrative and must not be presented as feeder-level operational truth.
 

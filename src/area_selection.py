@@ -6,7 +6,7 @@ import pandas as pd
 import pydeck as pdk
 
 from src.config import DEMO_DATA_DIR
-from src.network_loader import load_montreal_transmission_paths
+from src.network_loader import load_bc_transmission_paths, load_montreal_transmission_paths
 from src.population_loader import load_municipality_population, population_marker_radius
 
 # Default BC-wide view when nothing is selected.
@@ -194,6 +194,24 @@ def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
             merged["avg_customers_per_unique_outage"], errors="coerce"
         ).fillna(0).round(1)
     return merged
+
+
+def bc_transmission_path_layer() -> pdk.Layer | None:
+    """
+    Optional map underlay: BC Geographic Warehouse HV transmission lines (BC-wide reference).
+    """
+    paths_df = load_bc_transmission_paths()
+    if paths_df.empty:
+        return None
+    return pdk.Layer(
+        "PathLayer",
+        data=paths_df,
+        get_path="path",
+        get_color=[41, 128, 185, 190],
+        get_width=3,
+        width_min_pixels=2,
+        pickable=True,
+    )
 
 
 def montreal_transmission_path_layer() -> pdk.Layer | None:

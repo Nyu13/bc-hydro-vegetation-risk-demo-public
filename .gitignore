@@ -26,6 +26,8 @@ data/lignes-transport-electrique-2020.gpkg
 data/lignes-transport-electrique-2020.zip
 data/*.gpkg
 data/*.zip
+# Full BC/Montreal KML exports (loader stubs and vector dumps stay local)
+data/*.kml
 
 # OS/Editor
 .DS_Store

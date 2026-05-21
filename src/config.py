@@ -12,6 +12,10 @@ DOCS_DIR = PROJECT_ROOT / "docs"
 MONTREAL_TRANSMISSION_GPKG = DATA_DIR / "lignes-transport-electrique-2020.gpkg"
 MONTREAL_TRANSMISSION_GEOJSON = DEMO_DATA_DIR / "demo_montreal_transmission_lines_sample.geojson"
 
+# BC Geographic Warehouse transmission lines (optional local KML/WFS; bundled sample for Cloud)
+BC_TRANSMISSION_KML = DATA_DIR / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
+BC_TRANSMISSION_GEOJSON = DEMO_DATA_DIR / "demo_bc_transmission_lines_sample.geojson"
+
 BC_HYDRO_OUTAGE_JSON_URL = "https://www.bchydro.com/power-outages/app/outages-map-data.json"
 BC_HYDRO_OUTAGE_RSS_URL = "https://www.bchydro.com/rss/outages/all.xml"
 UNOFFICIAL_SNAPSHOT_URL = (

@@ -33,12 +33,17 @@ from src.area_selection import (
     fit_area_map_view_state,
     lookup_municipality_coordinates,
     lookup_region_coordinates,
+    bc_transmission_path_layer,
     montreal_transmission_path_layer,
     prepare_municipality_hotspot_map_df,
     prepare_region_hotspot_map_df,
     selection_area_map_view_state,
 )
-from src.network_loader import MONTREAL_TRANSMISSION_UI_LABEL, load_transmission_lines
+from src.network_loader import (
+    BC_TRANSMISSION_UI_LABEL,
+    MONTREAL_TRANSMISSION_UI_LABEL,
+    load_transmission_lines,
+)
 from src.risk_scoring import (
     assign_risk_level,
     calculate_demo_risk_score,
@@ -151,6 +156,13 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "used_in_demo_for": "Demo corridor map/ranking",
             "current_mode": "Synthetic demo records",
             "fallback_if_unavailable": "data/demo/demo_corridors.csv",
+        },
+        {
+            "dataset": "BC transmission lines (optional overlay)",
+            "primary_source_type": "Public — BC Geographic Warehouse / Geo.ca",
+            "used_in_demo_for": "Optional PathLayer — province-wide HV reference underlay",
+            "current_mode": "Bundled WGS84 GeoJSON sample (BC-wide, simplified)",
+            "fallback_if_unavailable": "data/demo/demo_bc_transmission_lines_sample.geojson",
         },
         {
             "dataset": "Montréal HV lines (optional overlay)",
@@ -369,6 +381,15 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         value=True,
         help="Disk area scales with √(population). Statistics Canada 2021 counts from bundled demo CSV.",
     )
+    show_bc_lines = st.checkbox(
+        BC_TRANSMISSION_UI_LABEL,
+        value=False,
+        help=(
+            "Province-wide HV transmission lines from BC Geographic Warehouse "
+            "(WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP). Reference overlay only — "
+            "demo corridor risk markers remain synthetic."
+        ),
+    )
     show_montreal_lines = st.checkbox(
         MONTREAL_TRANSMISSION_UI_LABEL,
         value=False,
@@ -413,6 +434,11 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     show_outage_markers = False
 
     # No internet basemap layer by design (demo portability).
+
+    if show_bc_lines:
+        bc_layer = bc_transmission_path_layer()
+        if bc_layer is not None:
+            layers.append(bc_layer)
 
     if show_montreal_lines:
         line_layer = montreal_transmission_path_layer()
@@ -514,11 +540,16 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         if scale_by_population
         else ""
     )
-    line_caption = (
-        " Orange paths = Ville de Montréal 2020 HV lines (Québec reference only, not BC assets)."
-        if show_montreal_lines
-        else ""
-    )
+    line_parts: list[str] = []
+    if show_bc_lines:
+        line_parts.append(
+            " Blue paths = BC Geographic Warehouse transmission lines (reference overlay)."
+        )
+    if show_montreal_lines:
+        line_parts.append(
+            " Orange paths = Ville de Montréal 2020 HV lines (Québec reference only, not BC assets)."
+        )
+    line_caption = "".join(line_parts)
     st.caption(
         "Colored disks = demo corridor risk (one per corridor, or one per region if aggregated)."
         + pop_caption
@@ -714,6 +745,14 @@ def _area_selection_tab() -> None:
             value=False,
             disabled=not is_region_view,
         )
+        show_bc_lines = st.checkbox(
+            BC_TRANSMISSION_UI_LABEL,
+            value=False,
+            help=(
+                "BC Geographic Warehouse HV transmission lines (province-wide reference). "
+                "Does not replace synthetic demo corridor risk markers."
+            ),
+        )
         show_montreal_lines = st.checkbox(
             MONTREAL_TRANSMISSION_UI_LABEL,
             value=False,
@@ -724,6 +763,10 @@ def _area_selection_tab() -> None:
         )
 
         layers: list[pdk.Layer] = []
+        if show_bc_lines:
+            bc_layer = bc_transmission_path_layer()
+            if bc_layer is not None:
+                layers.append(bc_layer)
         if show_montreal_lines:
             line_layer = montreal_transmission_path_layer()
             if line_layer is not None:
