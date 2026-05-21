@@ -72,7 +72,8 @@ When enabled, those sources return empty data on fetch failure instead of using 
   - [https://www.bchydro.com/rss/outages/all.xml](https://www.bchydro.com/rss/outages/all.xml)
 - Unofficial public outage snapshot archive:
   - [https://github.com/outages/bchydro-outages](https://github.com/outages/bchydro-outages)
-- Public transmission lines dataset reference:
+- BC public transmission lines (BC Geographic Warehouse): see [docs/bc_transmission_lines_public_data.md](docs/bc_transmission_lines_public_data.md); bundled sample `data/demo/demo_bc_transmission_lines_sample.geojson`
+- Geo.ca / Open Government catalogue record:
   - [https://www.app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a](https://www.app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a)
 - Environment and Climate Change Canada:
   - [https://climate.weather.gc.ca/](https://climate.weather.gc.ca/)

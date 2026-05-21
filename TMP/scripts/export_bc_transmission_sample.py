@@ -16,12 +16,16 @@ Output (committed for Streamlit Cloud, target < 500 KB):
 """
 from __future__ import annotations
 
+import argparse
 import json
+import urllib.parse
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import requests
+from shapely.geometry import box
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCAL_KML = REPO_ROOT / "data" / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
@@ -30,12 +34,10 @@ MAX_BYTES = 500 * 1024
 TARGET_FEATURES = 70
 SIMPLIFY_TOLERANCE_DEG = 0.0008
 
-WFS_URL = (
-    "https://openmaps.gov.bc.ca/geo/pub/WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP/ows"
-    "?service=WFS&version=2.0.0&request=GetFeature"
-    "&typeNames=pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP"
-    "&outputFormat=application/json"
-)
+WFS_BASE = "https://openmaps.gov.bc.ca/geo/pub/wfs"
+WFS_LAYER = "pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP"
+# Lower Mainland — matches demo corridor region (WGS84)
+DEFAULT_BBOX_WGS84 = (-123.25, 49.05, -122.35, 49.45)
 
 DATASET_NOTE = (
     "BC Geographic Warehouse WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP — "
@@ -44,10 +46,36 @@ DATASET_NOTE = (
 )
 
 
-def _load_from_wfs() -> gpd.GeoDataFrame:
-    gdf = gpd.read_file(WFS_URL)
-    if gdf.crs is None:
-        gdf = gdf.set_crs("EPSG:3005")
+def _wgs84_bbox_to_native(bbox_wgs84: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    xmin, ymin, xmax, ymax = bbox_wgs84
+    gdf = gpd.GeoDataFrame(geometry=[box(xmin, ymin, xmax, ymax)], crs="EPSG:4326").to_crs(3005)
+    return tuple(gdf.total_bounds)
+
+
+def _load_from_wfs(
+    *,
+    bbox_wgs84: tuple[float, float, float, float] | None = None,
+    max_features: int | None = None,
+) -> gpd.GeoDataFrame:
+    params = {
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "GetFeature",
+        "typeNames": WFS_LAYER,
+        "outputFormat": "application/json",
+    }
+    if max_features is not None:
+        params["count"] = str(max_features)
+    if bbox_wgs84 is not None:
+        xmin, ymin, xmax, ymax = _wgs84_bbox_to_native(bbox_wgs84)
+        params["bbox"] = f"{xmin},{ymin},{xmax},{ymax},urn:ogc:def:crs:EPSG::3005"
+    url = f"{WFS_BASE}?{urllib.parse.urlencode(params)}"
+    resp = requests.get(url, timeout=180)
+    resp.raise_for_status()
+    payload = json.loads(resp.text)
+    gdf = gpd.GeoDataFrame.from_features(payload.get("features") or [], crs="EPSG:3005")
+    if gdf.empty:
+        raise RuntimeError("WFS returned no features (check bbox CRS or network).")
     return gdf
 
 
@@ -128,11 +156,27 @@ def _prepare_output(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--lower-mainland",
+        action="store_true",
+        help="Fetch only Lower Mainland bbox (skip province-wide stratified sample)",
+    )
+    parser.add_argument(
+        "--max-features",
+        type=int,
+        default=None,
+        help="WFS feature cap (default: 120 for --lower-mainland, else full layer)",
+    )
+    args = parser.parse_args()
+
     gdf = _load_from_local_kml(LOCAL_KML)
     source = "local KML"
     if gdf is None:
-        gdf = _load_from_wfs()
-        source = "WFS (openmaps.gov.bc.ca)"
+        bbox = DEFAULT_BBOX_WGS84 if args.lower_mainland else None
+        cap = args.max_features if args.max_features is not None else (120 if args.lower_mainland else None)
+        gdf = _load_from_wfs(bbox_wgs84=bbox, max_features=cap)
+        source = "WFS (openmaps.gov.bc.ca)" + (" [Lower Mainland bbox]" if bbox else "")
 
     print(f"Loaded {len(gdf)} features from {source}")
     print("geometry types:", gdf.geometry.geom_type.value_counts().to_dict())
@@ -140,7 +184,10 @@ def main() -> None:
     bounds = gdf.to_crs(4326).total_bounds.tolist()
     print("WGS84 bounds [minx, miny, maxx, maxy]:", bounds)
 
-    sample = _stratified_sample(gdf, TARGET_FEATURES)
+    if args.lower_mainland:
+        sample = gdf
+    else:
+        sample = _stratified_sample(gdf, TARGET_FEATURES)
     out = _prepare_output(sample)
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)

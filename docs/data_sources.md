@@ -9,7 +9,7 @@
 | Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
 | Map extent (WGS84) | ~−123°, 49° (Lower Mainland sample) | ~−74°, 45.7° |
 
-**Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md)
+**Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md) · [TMP/docs/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/BC_TRANSMISSION_DOWNLOAD.md) (full URLs, KML stub note)
 
 ## Public Outage Sources
 
@@ -31,9 +31,13 @@
 | Publisher | Province of BC — BC Geographic Warehouse (DataBC) |
 | Catalogue | [catalogue.data.gov.bc.ca/dataset/bc-transmission-lines](https://catalogue.data.gov.bc.ca/dataset/bc-transmission-lines) |
 | Geo.ca | [384d551b-dee1-4df8-8148-b3fcf865096a](https://app.geo.ca/en-ca/map-browser/record/384d551b-dee1-4df8-8148-b3fcf865096a) |
+| GeoCore metadata JSON | [geocore.metadata.geo.ca/...geojson](https://geocore.metadata.geo.ca/384d551b-dee1-4df8-8148-b3fcf865096a.geojson) |
+| CSW (ISO record) | [csw.open.canada.ca GetRecordById](https://csw.open.canada.ca/geonetwork/srv/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=csw:IsoRecord&ElementSetName=full&id=384d551b-dee1-4df8-8148-b3fcf865096a) |
 | Open Government | [open.canada.ca dataset](https://open.canada.ca/data/en/dataset/384d551b-dee1-4df8-8148-b3fcf865096a) |
 | WFS layer | `pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP` |
-| WFS URL | `https://openmaps.gov.bc.ca/geo/pub/wfs` |
+| WFS URL | `https://openmaps.gov.bc.ca/geo/pub/wfs` (per-layer: `.../WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP/ows`) |
+| WMS capabilities | [layer GetCapabilities](https://openmaps.gov.bc.ca/geo/pub/WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP/ows?service=WMS&request=GetCapabilities) |
+| KML loader (stub) | [openmaps loader.kml](https://openmaps.gov.bc.ca/kml/geo/layers/WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml) — NetworkLink only; use WFS for geometry |
 | ArcGIS layer | [whse/bcgw_pub_whse_basemapping MapServer /77](https://delivery.maps.gov.bc.ca/arcgis/rest/services/whse/bcgw_pub_whse_basemapping/MapServer/77) |
 | Licence | Open Government Licence – British Columbia |
 | Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` (~140 KB, 120 lines, Lower Mainland bbox) |
@@ -42,7 +46,7 @@
 Regenerate sample:
 
 ```bash
-python TMP/scripts/download_bc_transmission_sample.py
+python TMP/scripts/export_bc_transmission_sample.py --lower-mainland
 ```
 
 **Caveats:** Public layer is a **province-wide HV transmission proxy**, not BC Hydro distribution/feeder GIS. Voltage and owner fields are often suppressed in the public release. Demo corridor risk scores remain **synthetic** (`demo_corridors.csv`).
