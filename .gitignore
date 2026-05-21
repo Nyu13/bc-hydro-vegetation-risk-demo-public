@@ -21,6 +21,12 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# Optional full GPKG/ZIP copies (use bundled data/demo/*.geojson sample instead)
+data/lignes-transport-electrique-2020.gpkg
+data/lignes-transport-electrique-2020.zip
+data/*.gpkg
+data/*.zip
+
 # OS/Editor
 .DS_Store
 Thumbs.db

@@ -32,6 +32,18 @@ DATA_SOURCES = [
         "notes": "Transmission proxy only; not distribution feeder topology.",
     },
     {
+        "name": "Ville de Montréal — Lignes de transport électrique (2020)",
+        "url": "https://donnees.montreal.ca/en/dataset/lignes-transport-electrique",
+        "classification": "Public reference (out of jurisdiction)",
+        "type": "Optional HV line overlay — Montréal metro only (Québec)",
+        "formal_poc_replacement": "BC Hydro transmission/corridor GIS for British Columbia",
+        "notes": (
+            "CC-BY 4.0; CMM 2020 aerial; EPSG:2950 source. Bundled WGS84 sample in "
+            "data/demo/demo_montreal_transmission_lines_sample.geojson. "
+            "Not BC Hydro — do not join to BC outage polygons."
+        ),
+    },
+    {
         "name": "Environment and Climate Change Canada",
         "url": "https://api.weather.gc.ca/",
         "classification": "Public",

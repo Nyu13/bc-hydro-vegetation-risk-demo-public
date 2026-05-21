@@ -11,6 +11,7 @@ This dashboard is an illustrative prototype and must not be used for operational
 - Public outage status sources (JSON/RSS) are used for current/recent visibility.
 - Unofficial public snapshot archive is used only as a historical proxy reference.
 - Public transmission geometry is treated as corridor proxy, not feeder topology.
+- Optional Montréal 2020 HV line overlay (`demo_montreal_transmission_lines_sample.geojson`) is a **Québec reference only** — not BC Hydro assets and not aligned to BC outage polygons.
 - Public weather data is used for storm severity context.
 - Public land-cover sources are used as vegetation exposure proxy.
 
