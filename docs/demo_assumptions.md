@@ -12,7 +12,6 @@ This dashboard is an illustrative prototype and must not be used for operational
 - Unofficial public snapshot archive is used only as a historical proxy reference.
 - Public transmission geometry is treated as corridor proxy, not feeder topology.
 - Demo corridor risk markers (`demo_corridors.csv`) remain **synthetic**; optional BC Geographic Warehouse overlay (`demo_bc_transmission_lines_sample.geojson`) is a **province-wide HV reference underlay** only.
-- Optional Montréal 2020 HV line overlay (`demo_montreal_transmission_lines_sample.geojson`) is a **Québec reference only** — not BC Hydro assets and not aligned to BC outage polygons.
 - Public weather data is used for storm severity context.
 - Public land-cover sources are used as vegetation exposure proxy.
 

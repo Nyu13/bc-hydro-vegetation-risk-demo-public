@@ -34,16 +34,11 @@ from src.area_selection import (
     lookup_municipality_coordinates,
     lookup_region_coordinates,
     bc_transmission_path_layer,
-    montreal_transmission_path_layer,
     prepare_municipality_hotspot_map_df,
     prepare_region_hotspot_map_df,
     selection_area_map_view_state,
 )
-from src.network_loader import (
-    BC_TRANSMISSION_UI_LABEL,
-    MONTREAL_TRANSMISSION_UI_LABEL,
-    load_transmission_lines,
-)
+from src.network_loader import BC_TRANSMISSION_UI_LABEL, load_transmission_lines
 from src.risk_scoring import (
     assign_risk_level,
     calculate_demo_risk_score,
@@ -163,13 +158,6 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "used_in_demo_for": "Optional PathLayer — province-wide HV reference underlay",
             "current_mode": "Bundled WGS84 GeoJSON sample (BC-wide, simplified)",
             "fallback_if_unavailable": "data/demo/demo_bc_transmission_lines_sample.geojson",
-        },
-        {
-            "dataset": "Montréal HV lines (optional overlay)",
-            "primary_source_type": "Public reference — Ville de Montréal 2020 (Québec)",
-            "used_in_demo_for": "Optional PathLayer — line proximity discussion only",
-            "current_mode": "Bundled GeoJSON sample (Montréal metro, not BC)",
-            "fallback_if_unavailable": "data/demo/demo_montreal_transmission_lines_sample.geojson",
         },
         {
             "dataset": "Backtesting",
@@ -390,15 +378,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
             "demo corridor risk markers remain synthetic."
         ),
     )
-    show_montreal_lines = st.checkbox(
-        MONTREAL_TRANSMISSION_UI_LABEL,
-        value=False,
-        help=(
-            "Optional reference geometry from Ville de Montréal open data (CMM 2020 aerial). "
-            "Covers the Montréal metropolitan area only — not BC Hydro transmission assets. "
-            "Useful to discuss line–vegetation proximity workflows; does not align with BC outage polygons."
-        ),
-    )
     st.caption(
         "Basemap is intentionally disabled for demo stability across corporate networks. "
         "Map focuses on risk, weather context, population context, and outage-proxy overlays."
@@ -439,11 +418,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         bc_layer = bc_transmission_path_layer()
         if bc_layer is not None:
             layers.append(bc_layer)
-
-    if show_montreal_lines:
-        line_layer = montreal_transmission_path_layer()
-        if line_layer is not None:
-            layers.append(line_layer)
 
     # Weather: outline-only ring, drawn *under* risk fills so colors do not blend into purple/mud.
     if (
@@ -544,10 +518,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     if show_bc_lines:
         line_parts.append(
             " Blue paths = BC Geographic Warehouse transmission lines (reference overlay)."
-        )
-    if show_montreal_lines:
-        line_parts.append(
-            " Orange paths = Ville de Montréal 2020 HV lines (Québec reference only, not BC assets)."
         )
     line_caption = "".join(line_parts)
     st.caption(
@@ -753,24 +723,11 @@ def _area_selection_tab() -> None:
                 "Does not replace synthetic demo corridor risk markers."
             ),
         )
-        show_montreal_lines = st.checkbox(
-            MONTREAL_TRANSMISSION_UI_LABEL,
-            value=False,
-            help=(
-                "Reference HV line geometry for Montréal (Ville de Montréal 2020). "
-                "Not BC Hydro — shown only as an optional cross-jurisdiction example."
-            ),
-        )
-
         layers: list[pdk.Layer] = []
         if show_bc_lines:
             bc_layer = bc_transmission_path_layer()
             if bc_layer is not None:
                 layers.append(bc_layer)
-        if show_montreal_lines:
-            line_layer = montreal_transmission_path_layer()
-            if line_layer is not None:
-                layers.append(line_layer)
         tooltip: dict[str, str] = {"text": "No data"}
         map_df = pd.DataFrame()
 

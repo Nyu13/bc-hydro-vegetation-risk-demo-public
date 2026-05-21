@@ -1,15 +1,10 @@
 # Data Sources
 
-## BC vs Montréal transmission geometry (read this first)
-
-| Question | **Use BC sources below** | **Do not use for BC demo** |
-| --- | --- | --- |
-| Jurisdiction | British Columbia | Montréal, Québec only |
-| File to avoid confusing | `WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP` | `lignes-transport-electrique-2020.gpkg` / `.zip` |
-| Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
-| Map extent (WGS84) | ~−123°, 49° (Lower Mainland sample) | ~−74°, 45.7° |
+## BC transmission geometry
 
 **Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md) · [TMP/docs/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/BC_TRANSMISSION_DOWNLOAD.md) (full URLs, KML stub note)
+
+Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson`
 
 ## Public Outage Sources
 
@@ -46,7 +41,7 @@
 Regenerate sample:
 
 ```bash
-python TMP/scripts/download_bc_transmission_sample.py
+python TMP/scripts/export_bc_transmission_sample.py --lower-mainland
 ```
 
 **Caveats:** Public layer is a **province-wide HV transmission proxy**, not BC Hydro distribution/feeder GIS. Voltage and owner fields are often suppressed in the public release. Demo corridor risk scores remain **synthetic** (`demo_corridors.csv`).
@@ -54,21 +49,6 @@ python TMP/scripts/download_bc_transmission_sample.py
 ### Synthetic demo corridors (default risk map)
 
 - `data/demo/demo_corridors.csv` — illustrative corridor centroids/scores, not derived from live BC line geometry.
-
-## Optional reference: Ville de Montréal transmission lines (2020)
-
-**Geographic coverage: Montréal metropolitan area (Québec) only — not BC Hydro, not province-wide Hydro-Québec.**
-
-| Field | Value |
-| --- | --- |
-| Dataset (FR) | Lignes de transport électrique |
-| Publisher | Ville de Montréal — Division de la géomatique |
-| Portal | [donnees.montreal.ca](https://donnees.montreal.ca/en/dataset/lignes-transport-electrique) |
-| License | Creative Commons Attribution 4.0 (CC-BY 4.0) |
-| Bundled sample | `data/demo/demo_montreal_transmission_lines_sample.geojson` |
-| Local full copy (gitignored) | `data/lignes-transport-electrique-2020.gpkg` / `.zip` |
-
-Regenerate: `python TMP/scripts/export_montreal_transmission_sample.py`. Map checkbox is separate from BC lines — off by default.
 
 ## Weather
 

@@ -6,7 +6,7 @@ import pandas as pd
 import pydeck as pdk
 
 from src.config import DEMO_DATA_DIR
-from src.network_loader import load_bc_transmission_paths, load_montreal_transmission_paths
+from src.network_loader import load_bc_transmission_paths
 from src.population_loader import load_municipality_population, population_marker_radius
 
 # Default BC-wide view when nothing is selected.
@@ -213,20 +213,3 @@ def bc_transmission_path_layer() -> pdk.Layer | None:
         pickable=True,
     )
 
-
-def montreal_transmission_path_layer() -> pdk.Layer | None:
-    """
-    Optional map underlay: Ville de Montréal 2020 HV lines (Québec — not BC Hydro).
-    """
-    paths_df = load_montreal_transmission_paths()
-    if paths_df.empty:
-        return None
-    return pdk.Layer(
-        "PathLayer",
-        data=paths_df,
-        get_path="path",
-        get_color=[230, 126, 34, 180],
-        get_width=3,
-        width_min_pixels=2,
-        pickable=True,
-    )

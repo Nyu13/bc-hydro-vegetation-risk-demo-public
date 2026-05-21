@@ -8,10 +8,6 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 DEMO_DATA_DIR = DATA_DIR / "demo"
 DOCS_DIR = PROJECT_ROOT / "docs"
 
-# Optional local GPKG (gitignored); bundled GeoJSON sample ships with the demo.
-MONTREAL_TRANSMISSION_GPKG = DATA_DIR / "lignes-transport-electrique-2020.gpkg"
-MONTREAL_TRANSMISSION_GEOJSON = DEMO_DATA_DIR / "demo_montreal_transmission_lines_sample.geojson"
-
 # BC Geographic Warehouse transmission lines (optional local KML/WFS; bundled sample for Cloud)
 BC_TRANSMISSION_KML = DATA_DIR / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
 BC_TRANSMISSION_GEOJSON = DEMO_DATA_DIR / "demo_bc_transmission_lines_sample.geojson"
