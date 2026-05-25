@@ -124,6 +124,23 @@ def load_weather_cached(live_public_only: bool) -> pd.DataFrame:
     return load_weather_demo(allow_synthetic_fallback=not live_public_only)
 
 
+with st.sidebar:
+    st.markdown("### Live data")
+    if st.button(
+        "Refresh live data",
+        help=(
+            "Clears cached BC Hydro outage JSON/RSS, unofficial snapshots, and weather loader results, "
+            "then refetches on the next render. Does not reload bundled demo corridors, risk scores, "
+            "or area-selection archive CSVs."
+        ),
+    ):
+        load_outages_json_cached.clear()
+        load_outages_rss_cached.clear()
+        load_unofficial_snapshots_cached.clear()
+        load_weather_cached.clear()
+        st.rerun()
+
+
 def _build_data_provenance_table() -> pd.DataFrame:
     mode = (
         "Synthetic (offline forced)"

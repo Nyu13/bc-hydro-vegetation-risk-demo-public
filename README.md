@@ -57,6 +57,10 @@ In the app UI, enable:
 
 When enabled, those sources return empty data on fetch failure instead of using synthetic fallback files.
 
+### Refreshing live public feeds in a running session
+
+Public outage JSON/RSS, unofficial snapshots, and the weather loader are cached for the Streamlit session (`@st.cache_data` with no TTL). Use the sidebar **Refresh live data** button to clear that cache and refetch without restarting the app. Bundled demo corridors, risk scores, backtesting, and area-selection archive tables are not refreshed by that button — update those via `EXTRACTOR_OUTPUT_DIR` or `TMP/scripts/refresh_area_selection_data.py` (see below).
+
 ## Project Structure
 
 - `app.py`: Streamlit app
