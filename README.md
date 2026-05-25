@@ -8,7 +8,7 @@ This project is a **demo-only** Streamlit **concept dashboard** that illustrates
 
 This prototype illustrates analytical workflow only; it does not predict BC Hydro outages and must not be used for operational decisions.
 
-**PoC pilot region:** Surrey (BC Hydro region: Lower Mainland) — the dashboard defaults to municipality view and Surrey/Lower Mainland map zoom; all BC regions and municipalities remain in the tables.
+**PoC pilot area:** Surrey (`DEMO_PILOT_MUNICIPALITY` in `src/config.py`; BC Hydro region `Lower Mainland`). On load: municipality view, Surrey listed first, maps at ~49.19°N / 122.85°W, demo corridors filtered to Surrey when present. **All BC regions** and **All BC demo corridors** expanders keep province-wide context.
 
 ## What This Demo Shows
 

@@ -10,7 +10,10 @@ from src.config import (
     DEMO_PILOT_BC_HYDRO_REGION,
     DEMO_PILOT_LAT,
     DEMO_PILOT_LON,
+    DEMO_PILOT_MAP_ZOOM,
     DEMO_PILOT_MUNICIPALITY,
+    DEMO_PILOT_REGION,
+    DEMO_PILOT_TRANSMISSION_BBOX,
 )
 from src.network_loader import load_bc_transmission_paths
 from src.population_loader import load_municipality_population, population_marker_radius
@@ -66,13 +69,15 @@ def lookup_municipality_coordinates(municipality: str) -> tuple[float, float] | 
     return lat, lon
 
 
-def default_area_map_view_state() -> pdk.ViewState:
+def default_area_map_view_state(*, pilot: bool = True) -> pdk.ViewState:
+    if pilot:
+        return pilot_area_map_view_state()
     return pdk.ViewState(**BC_DEFAULT_VIEW)
 
 
 def pilot_area_map_view_state(*, municipality: bool = True) -> pdk.ViewState:
     """Default PoC map view — Surrey / Lower Mainland metro context."""
-    zoom = MUNICIPALITY_SELECTION_ZOOM if municipality else REGION_SELECTION_ZOOM
+    zoom = DEMO_PILOT_MAP_ZOOM if municipality else REGION_SELECTION_ZOOM
     return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=zoom)
 
 
@@ -202,7 +207,11 @@ def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
     return merged, source
 
 
-def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
+def prepare_municipality_hotspot_map_df(
+    limit: int = 25,
+    *,
+    region_filter: str | None = DEMO_PILOT_REGION,
+) -> pd.DataFrame:
     """Top municipalities by priority score with population coordinates when available."""
     from src.region_history_loader import load_municipality_outage_summary
 
@@ -210,7 +219,12 @@ def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
     if mun_df.empty:
         return mun_df
 
-    ranked = mun_df.sort_values("suggested_priority_score", ascending=False).head(limit)
+    if region_filter and "region_name" in mun_df.columns:
+        mun_df = mun_df.loc[mun_df["region_name"] == region_filter]
+    ranked = promote_pilot_row(
+        mun_df.sort_values("suggested_priority_score", ascending=False),
+        municipality=True,
+    ).head(limit)
     pop_df = load_municipality_population()
     if pop_df.empty:
         return ranked
@@ -242,11 +256,12 @@ def prepare_municipality_hotspot_map_df(limit: int = 25) -> pd.DataFrame:
     return merged
 
 
-def bc_transmission_path_layer() -> pdk.Layer | None:
+def bc_transmission_path_layer(*, clip_to_pilot_bbox: bool = True) -> pdk.Layer | None:
     """
     Optional map underlay: BC Geographic Warehouse HV transmission lines (BC-wide reference).
     """
-    paths_df = load_bc_transmission_paths()
+    bbox = DEMO_PILOT_TRANSMISSION_BBOX if clip_to_pilot_bbox else None
+    paths_df = load_bc_transmission_paths(bbox=bbox)
     if paths_df.empty:
         return None
     return pdk.Layer(

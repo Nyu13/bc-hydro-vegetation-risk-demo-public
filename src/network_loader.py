@@ -9,6 +9,8 @@ from src.config import (
     BC_TRANSMISSION_GEOJSON,
     BC_TRANSMISSION_KML,
     DEMO_DATA_DIR,
+    DEMO_PILOT_MUNICIPALITY,
+    DEMO_PILOT_TRANSMISSION_BBOX,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -18,13 +20,28 @@ BC_TRANSMISSION_UI_LABEL = (
 )
 
 
-def load_transmission_lines() -> pd.DataFrame:
+def _read_demo_corridors_csv() -> pd.DataFrame:
     try:
-        df = pd.read_csv(DEMO_DATA_DIR / "demo_corridors.csv")
-        return df
+        return pd.read_csv(DEMO_DATA_DIR / "demo_corridors.csv")
     except Exception as exc:
         LOGGER.error("Failed to load demo corridor data: %s", exc)
         return pd.DataFrame()
+
+
+def load_transmission_lines(*, pilot_scope: bool = True) -> pd.DataFrame:
+    """Demo corridor centroids; defaults to Surrey pilot rows when present."""
+    df = _read_demo_corridors_csv()
+    if df.empty or not pilot_scope or "municipality" not in df.columns:
+        return df
+    pilot_rows = df.loc[df["municipality"] == DEMO_PILOT_MUNICIPALITY]
+    if not pilot_rows.empty:
+        return pilot_rows.copy()
+    return df
+
+
+def load_all_demo_corridors() -> pd.DataFrame:
+    """Full bundled demo_corridors.csv (all BC regions in the demo file)."""
+    return _read_demo_corridors_csv()
 
 
 def _coords_to_path(coords: list) -> list[list[float]]:
@@ -53,7 +70,18 @@ def _geometry_to_paths(geom: dict) -> list[list[list[float]]]:
     return []
 
 
-def load_bc_transmission_paths() -> pd.DataFrame:
+def _path_intersects_bbox(path: list[list[float]], bbox: tuple[float, float, float, float]) -> bool:
+    min_lon, min_lat, max_lon, max_lat = bbox
+    for lon, lat in path:
+        if min_lon <= lon <= max_lon and min_lat <= lat <= max_lat:
+            return True
+    return False
+
+
+def load_bc_transmission_paths(
+    *,
+    bbox: tuple[float, float, float, float] | None = None,
+) -> pd.DataFrame:
     geojson_path = BC_TRANSMISSION_GEOJSON
     if not geojson_path.exists():
         LOGGER.warning("BC transmission sample missing: %s", geojson_path)
@@ -74,6 +102,8 @@ def load_bc_transmission_paths() -> pd.DataFrame:
             "BC Geographic Warehouse transmission lines — reference overlay (not feeder GIS).",
         )
         for path in _geometry_to_paths(geom):
+            if bbox is not None and not _path_intersects_bbox(path, bbox):
+                continue
             rows.append({"path": path, "line_id": line_id, "dataset_note": note})
     if not rows:
         return pd.DataFrame()

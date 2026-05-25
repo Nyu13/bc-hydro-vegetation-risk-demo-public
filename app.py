@@ -10,6 +10,7 @@ from src.config import (
     DEMO_DATA_DIR,
     DEMO_OFFLINE_MODE,
     DEMO_PILOT_BC_HYDRO_REGION,
+    DEMO_PILOT_DISCLAIMER,
     DEMO_PILOT_MUNICIPALITY,
     DEMO_PRIMARY_DISCLAIMER,
     DEMO_SECONDARY_DISCLAIMER,
@@ -43,7 +44,11 @@ from src.area_selection import (
     risk_map_pilot_view_state,
     selection_area_map_view_state,
 )
-from src.network_loader import BC_TRANSMISSION_UI_LABEL, load_transmission_lines
+from src.network_loader import (
+    BC_TRANSMISSION_UI_LABEL,
+    load_all_demo_corridors,
+    load_transmission_lines,
+)
 from src.risk_scoring import (
     assign_risk_level,
     calculate_demo_risk_score,
@@ -81,6 +86,7 @@ _chart_dark = st.session_state.ui_theme_radio == "Dark"
 st.title("BC Hydro Vegetation-Weather Outage Risk Demo")
 st.warning(DEMO_PRIMARY_DISCLAIMER)
 st.info(DEMO_SECONDARY_DISCLAIMER)
+st.caption(DEMO_PILOT_DISCLAIMER)
 st.caption(f"Data mode: {'Offline local demo CSVs' if DEMO_OFFLINE_MODE else 'Online with local CSV fallback'}")
 LIVE_PUBLIC_ONLY = st.toggle(
     "Live public only (no synthetic fallback for outage JSON/RSS, unofficial snapshots, weather)",
@@ -206,10 +212,13 @@ def _build_data_provenance_table() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _prepare_risk_data(live_public_only: bool) -> pd.DataFrame:
-    corridors = load_transmission_lines()
+def _prepare_risk_data(live_public_only: bool, *, pilot_scope: bool = True) -> pd.DataFrame:
+    corridors = load_transmission_lines(pilot_scope=pilot_scope)
     weather = load_weather_cached(live_public_only)
     risk_df = load_demo_risk_table().copy()
+    if pilot_scope and not corridors.empty and "demo_corridor_id" in corridors.columns:
+        pilot_ids = set(corridors["demo_corridor_id"])
+        risk_df = risk_df.loc[risk_df["demo_corridor_id"].isin(pilot_ids)]
     if weather.empty or "region" not in weather.columns or "weather_severity_score" not in weather.columns:
         weather_by_region = pd.DataFrame(columns=["region", "weather_severity_score", "weather_code"])
     else:
@@ -397,9 +406,8 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         BC_TRANSMISSION_UI_LABEL,
         value=False,
         help=(
-            "Province-wide HV transmission lines from BC Geographic Warehouse "
-            "(WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP). Reference overlay only — "
-            "demo corridor risk markers remain synthetic."
+            "HV transmission lines from BC Geographic Warehouse (reference overlay). "
+            f"When enabled, lines are clipped to the **{DEMO_PILOT_MUNICIPALITY}** pilot bbox by default."
         ),
     )
     st.caption(
@@ -512,8 +520,10 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     layers.append(corridor_layer)
 
     st.info(
-        "Map shows demo corridor risk by region using public/proxy data. "
-        "It does not represent BC Hydro feeder-level topology."
+        "Map shows demo corridor risk using public/proxy data. "
+        f"Default corridors are scoped to **{DEMO_PILOT_MUNICIPALITY}** when present in "
+        "`demo_corridors.csv`; use the region filter or **All BC demo corridors** on the dashboard to broaden. "
+        "This does not represent BC Hydro feeder-level topology."
     )
     _render_map_legend(
         show_weather_bubbles=show_weather_bubbles,
@@ -678,6 +688,7 @@ def _area_selection_tab() -> None:
     view = st.radio(
         "Rank by",
         ["BC Hydro region", "Municipality (top hotspots)"],
+        index=1,
         horizontal=True,
         key="area_selection_default_view",
     )
@@ -695,8 +706,11 @@ def _area_selection_tab() -> None:
             )
     elif not mun_df.empty:
         display_cols = select_display_columns(mun_df, municipality=True)
+        pilot_mun = mun_df
+        if "region_name" in mun_df.columns:
+            pilot_mun = mun_df.loc[mun_df["region_name"] == DEMO_PILOT_BC_HYDRO_REGION]
         ranked = promote_pilot_row(
-            mun_df.sort_values("unique_outages", ascending=False).head(25),
+            pilot_mun.sort_values("unique_outages", ascending=False).head(25),
             municipality=True,
         )
 
@@ -776,8 +790,8 @@ def _area_selection_tab() -> None:
             BC_TRANSMISSION_UI_LABEL,
             value=False,
             help=(
-                "BC Geographic Warehouse HV transmission lines (province-wide reference). "
-                "Does not replace synthetic demo corridor risk markers."
+                "BC Geographic Warehouse HV transmission lines (reference overlay). "
+                f"Clipped to the **{DEMO_PILOT_MUNICIPALITY}** pilot bbox when enabled."
             ),
         )
         layers: list[pdk.Layer] = []
@@ -840,6 +854,34 @@ def _area_selection_tab() -> None:
             )
             st.pydeck_chart(deck, width="stretch")
 
+    with st.expander("All BC regions"):
+        st.caption(
+            "Province-wide unofficial archive rankings (not filtered to the pilot region). "
+            "Map defaults above stay on the pilot area."
+        )
+        if region_df.empty:
+            st.info("No region summary loaded.")
+        else:
+            st.dataframe(
+                promote_pilot_row(
+                    region_df.sort_values("unique_outages", ascending=False),
+                    municipality=False,
+                )[select_display_columns(region_df, municipality=False)],
+                column_config=_area_selection_column_config(),
+                width="stretch",
+            )
+        if mun_df.empty:
+            st.info("No municipality summary loaded.")
+        else:
+            st.dataframe(
+                promote_pilot_row(
+                    mun_df.sort_values("unique_outages", ascending=False),
+                    municipality=True,
+                )[select_display_columns(mun_df, municipality=True)],
+                column_config=_area_selection_column_config(),
+                width="stretch",
+            )
+
     st.caption(
         "Refresh bundled summaries from the outage-history extractor: copy "
         "`data/processed/region_summary.csv` and `municipality_summary.csv` into "
@@ -853,7 +895,7 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    st.success(f"**PoC pilot region: {DEMO_PILOT_MUNICIPALITY}** ({DEMO_PILOT_BC_HYDRO_REGION}) — demo defaults open here; BC-wide data stays available in other tabs.")
+    st.success(f"**{DEMO_PILOT_DISCLAIMER}** — demo defaults open on Surrey; BC-wide data stays available in other tabs and expanders.")
     st.markdown("### What this demo shows")
     st.markdown(
         """
@@ -891,6 +933,13 @@ with tabs[1]:
     outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
     st.markdown("#### Storm risk summary")
     _summary_cards(risk_df, outages_json_df)
+
+    with st.expander("All BC demo corridors"):
+        st.caption(
+            f"Bundled synthetic corridors across BC ({len(load_all_demo_corridors())} rows). "
+            f"Risk dashboard defaults to **{DEMO_PILOT_MUNICIPALITY}** pilot corridor(s)."
+        )
+        st.dataframe(load_all_demo_corridors(), width="stretch")
 
     st.markdown("#### Risk ranking")
     level_filter = st.multiselect(

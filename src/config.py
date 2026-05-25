@@ -34,10 +34,15 @@ DEMO_DISCLAIMER = DEMO_SECONDARY_DISCLAIMER
 
 DEMO_OFFLINE_MODE = os.getenv("DEMO_OFFLINE_MODE", "0").strip().lower() in {"1", "true", "yes"}
 
-# PoC pilot focus (demo defaults only — BC-wide data and all regions remain available)
+# PoC pilot geography (Surrey / Lower Mainland)
 DEMO_PILOT_MUNICIPALITY = "Surrey"
-DEMO_PILOT_BC_HYDRO_REGION = "Lower Mainland"
-# Centroid aligned with demo_corridors.csv / demo_municipality_population.csv
-DEMO_PILOT_LAT = 49.1913
-DEMO_PILOT_LON = -122.8490
+DEMO_PILOT_REGION = "Lower Mainland"
+# Alias used in UI copy and outage summaries (region_name column)
+DEMO_PILOT_BC_HYDRO_REGION = DEMO_PILOT_REGION
+DEMO_PILOT_LAT = 49.19
+DEMO_PILOT_LON = -122.85
+DEMO_PILOT_MAP_ZOOM = 10.5
+# WGS84 bbox for optional transmission overlay clip (min_lon, min_lat, max_lon, max_lat)
+DEMO_PILOT_TRANSMISSION_BBOX = (-123.05, 49.02, -122.65, 49.35)
 
+DEMO_PILOT_DISCLAIMER = f"PoC pilot area: {DEMO_PILOT_MUNICIPALITY} ({DEMO_PILOT_REGION})"
