@@ -21,11 +21,6 @@ from src.outage_loader import (
     load_bchydro_rss,
     load_unofficial_outage_snapshots_placeholder,
 )
-from src.population_loader import (
-    attach_population,
-    load_municipality_population,
-    population_marker_radius,
-)
 from src.region_history_loader import (
     load_municipality_outage_summary,
     load_region_outage_summary,
@@ -200,14 +195,14 @@ def _build_data_provenance_table() -> pd.DataFrame:
         {
             "dataset": "Municipality population (2021 Census)",
             "primary_source_type": "Public (Statistics Canada, bundled subset)",
-            "used_in_demo_for": "Map marker scale / tooltips (context only)",
+            "used_in_demo_for": "Area selection map — population outline rings (context only)",
             "current_mode": "Bundled demo CSV",
             "fallback_if_unavailable": "data/demo/demo_municipality_population.csv",
         },
         {
             "dataset": "Region outage summary (unofficial archive)",
             "primary_source_type": "Public proxy (unofficial snapshots)",
-            "used_in_demo_for": "Areas-with-most-issues reference table",
+            "used_in_demo_for": "Area selection — region hotspot ranking",
             "current_mode": "Bundled demo snapshot or data/processed/region_summary.csv",
             "fallback_if_unavailable": "data/demo/demo_region_outage_summary.csv",
         },
@@ -302,7 +297,6 @@ def _render_map_legend(
     *,
     show_weather_bubbles: bool,
     show_outage_markers: bool,
-    scale_by_population: bool,
 ) -> None:
     """Legend matches map layers: filled disks for risk; blue outline for weather when shown."""
     swatches: list[str] = [
@@ -334,27 +328,12 @@ def _render_map_legend(
             'background:rgb(80, 80, 80);opacity:0.75;border:1px solid rgba(0,0,0,0.2);"></span>'
             '<span style="font-size:0.9rem;">Public outage (region proxy)</span></div>'
         )
-    if scale_by_population:
-        swatches.append(
-            '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-            '<span style="display:inline-block;width:22px;height:14px;border-radius:50%;'
-            'background:rgb(40, 167, 69);opacity:0.9;border:1px solid rgba(0,0,0,0.2);"></span>'
-            '<span style="font-size:0.9rem;">Larger disk ≈ higher 2021 population</span></div>'
-        )
     cells = "".join(swatches)
     st.markdown(
         f'<div style="display:flex;flex-wrap:wrap;align-items:center;margin:0.35rem 0 0.75rem 0;">'
         f"<strong>Legend</strong>&nbsp;&nbsp;{cells}</div>",
         unsafe_allow_html=True,
     )
-
-
-def _archive_snapshot_range_label(df: pd.DataFrame) -> str:
-    if df.empty or not {"first_snapshot_date", "last_snapshot_date"} <= set(df.columns):
-        return "unofficial archive"
-    start = df["first_snapshot_date"].min()
-    end = df["last_snapshot_date"].max()
-    return f"{start} to {end}, unofficial archive"
 
 
 def _area_selection_column_config() -> dict:
@@ -393,7 +372,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         f"PoC pilot focus: **{DEMO_PILOT_MUNICIPALITY}** ({DEMO_PILOT_BC_HYDRO_REGION}). "
         "All BC regions remain in data — adjust filters below."
     )
-    region_history_df, region_history_source = load_region_outage_summary()
     all_regions = sorted(risk_df["region"].dropna().unique().tolist()) if "region" in risk_df.columns else []
     default_regions = (
         [DEMO_PILOT_BC_HYDRO_REGION]
@@ -414,11 +392,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         help="Same region can have several demo corridors (e.g. Lower Mainland has two), each with its own marker. "
         "When enabled, regional weather appears as a blue outline ring under risk disks.",
     )
-    scale_by_population = st.checkbox(
-        "Scale marker size by 2021 Census population (municipality)",
-        value=True,
-        help="Disk area scales with √(population). Statistics Canada 2021 counts from bundled demo CSV.",
-    )
     show_bc_lines = st.checkbox(
         BC_TRANSMISSION_UI_LABEL,
         value=False,
@@ -429,9 +402,9 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     )
     st.caption(
         "Basemap is intentionally disabled for demo stability across corporate networks. "
-        "Map focuses on risk, weather context, population context, and outage-proxy overlays."
+        "Map focuses on risk, weather context, and outage-proxy overlays."
     )
-    mapped = attach_population(risk_df.copy())
+    mapped = risk_df.copy()
     if region_filter and "region" in mapped.columns:
         mapped = mapped[mapped["region"].isin(region_filter)]
     if mapped.empty:
@@ -448,18 +421,12 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         # Avoid double stack: risk marker already encodes region; weather ring duplicates centroid.
         show_weather_bubbles = False
 
-    if scale_by_population:
-        mapped["radius_m"] = mapped["population_2021"].apply(population_marker_radius)
-        radius_spec: int | str = "radius_m"
-    else:
-        radius_spec = 8000
-
     corridor_layer = pdk.Layer(
         "ScatterplotLayer",
         data=mapped,
         get_position="[lon, lat]",
         get_fill_color="color",
-        get_radius=radius_spec,
+        get_radius=8000,
         pickable=True,
     )
 
@@ -545,7 +512,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     _render_map_legend(
         show_weather_bubbles=show_weather_bubbles,
         show_outage_markers=show_outage_markers,
-        scale_by_population=scale_by_population,
     )
 
     tooltip_lines = [
@@ -554,7 +520,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         "Score: {risk_score}",
         "Region: {region}",
         "Municipality: {municipality}",
-        "Population (2021): {population_2021}",
         "Weather severity: {weather_severity_score}",
         "Weather code: {weather_code}",
     ]
@@ -565,11 +530,6 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         tooltip={"text": "\n".join(tooltip_lines)},
     )
     st.pydeck_chart(deck, width="stretch")
-    pop_caption = (
-        " Disk size reflects 2021 Census municipality population (√ scale)."
-        if scale_by_population
-        else ""
-    )
     line_parts: list[str] = []
     if show_bc_lines:
         line_parts.append(
@@ -578,44 +538,10 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     line_caption = "".join(line_parts)
     st.caption(
         "Colored disks = demo corridor risk (one per corridor, or one per region if aggregated)."
-        + pop_caption
-        + " Blue ring = regional weather severity (outline only, under risk). "
-        "Gray disks = public outage markers (under risk). "
-        "Population is context only — not used in the demo risk score."
+        " Blue ring = regional weather severity (outline only, under risk). "
+        "Gray disks = public outage markers (under risk)."
         + line_caption
     )
-
-    with st.expander(
-        f"Unofficial outage history ({_archive_snapshot_range_label(region_history_df)}) — "
-        "regions with most visible issues (proxy)"
-    ):
-        st.caption(
-            "Snapshot-based counts from the unofficial public archive (not BC Hydro–validated). "
-            "Copy `region_summary.csv` from the outage-history extractor to `data/processed/` "
-            "or set `EXTRACTOR_OUTPUT_DIR` to refresh. Source: "
-            f"{region_history_source}."
-        )
-        if region_history_df.empty:
-            st.info("No region summary loaded.")
-        else:
-            display_cols = select_display_columns(region_history_df, municipality=False)
-            st.dataframe(
-                region_history_df[display_cols].sort_values(
-                    "suggested_priority_score", ascending=False
-                ),
-                column_config=_area_selection_column_config(),
-                width="stretch",
-            )
-
-    with st.expander("Municipality population (2021 Census, demo subset)"):
-        pop_df = load_municipality_population()
-        if pop_df.empty:
-            st.info("Population file not available.")
-        else:
-            st.dataframe(
-                pop_df[["municipality", "region", "population_2021", "source_note"]],
-                width="stretch",
-            )
 
 
 def _area_hotspot_map_layers(map_df: pd.DataFrame, *, municipality: bool) -> list[pdk.Layer]:
