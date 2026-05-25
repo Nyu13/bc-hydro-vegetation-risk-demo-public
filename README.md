@@ -8,6 +8,8 @@ This project is a **demo-only** Streamlit **concept dashboard** that illustrates
 
 This prototype illustrates analytical workflow only; it does not predict BC Hydro outages and must not be used for operational decisions.
 
+**PoC pilot region:** Surrey (BC Hydro region: Lower Mainland) — the dashboard defaults to municipality view and Surrey/Lower Mainland map zoom; all BC regions and municipalities remain in the tables.
+
 ## What This Demo Shows
 
 - Where outage risk may be elevated (illustrative demo corridors)

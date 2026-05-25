@@ -9,6 +9,8 @@ from src.backtesting import compute_backtesting_metrics, load_backtesting_data
 from src.config import (
     DEMO_DATA_DIR,
     DEMO_OFFLINE_MODE,
+    DEMO_PILOT_BC_HYDRO_REGION,
+    DEMO_PILOT_MUNICIPALITY,
     DEMO_PRIMARY_DISCLAIMER,
     DEMO_SECONDARY_DISCLAIMER,
 )
@@ -34,8 +36,11 @@ from src.area_selection import (
     lookup_municipality_coordinates,
     lookup_region_coordinates,
     bc_transmission_path_layer,
+    pilot_area_map_view_state,
     prepare_municipality_hotspot_map_df,
     prepare_region_hotspot_map_df,
+    promote_pilot_row,
+    risk_map_pilot_view_state,
     selection_area_map_view_state,
 )
 from src.network_loader import BC_TRANSMISSION_UI_LABEL, load_transmission_lines
@@ -57,6 +62,9 @@ st.set_page_config(
 
 if "ui_theme_radio" not in st.session_state:
     st.session_state.ui_theme_radio = "Light"
+
+if "area_selection_default_view" not in st.session_state:
+    st.session_state.area_selection_default_view = "Municipality (top hotspots)"
 
 with st.sidebar:
     st.markdown("### Appearance")
@@ -355,7 +363,23 @@ def _area_selection_column_config() -> dict:
 
 def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd.DataFrame) -> None:
     st.subheader("Risk Map")
+    st.caption(
+        f"PoC pilot focus: **{DEMO_PILOT_MUNICIPALITY}** ({DEMO_PILOT_BC_HYDRO_REGION}). "
+        "All BC regions remain in data — adjust filters below."
+    )
     region_history_df, region_history_source = load_region_outage_summary()
+    all_regions = sorted(risk_df["region"].dropna().unique().tolist()) if "region" in risk_df.columns else []
+    default_regions = (
+        [DEMO_PILOT_BC_HYDRO_REGION]
+        if DEMO_PILOT_BC_HYDRO_REGION in all_regions
+        else all_regions
+    )
+    region_filter = st.multiselect(
+        "Filter demo corridors by BC Hydro region",
+        options=all_regions,
+        default=default_regions,
+        help="Defaults to the pilot region; add or remove regions without changing underlying data.",
+    )
     map_density = st.radio(
         "Map markers",
         options=["One circle per demo corridor", "One circle per region (max risk)"],
@@ -383,6 +407,11 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
         "Map focuses on risk, weather context, population context, and outage-proxy overlays."
     )
     mapped = attach_population(risk_df.copy())
+    if region_filter and "region" in mapped.columns:
+        mapped = mapped[mapped["region"].isin(region_filter)]
+    if mapped.empty:
+        st.warning("No demo corridors match the selected regions. Clear or broaden the region filter.")
+        return
     mapped["color"] = mapped["risk_level"].apply(risk_color)
 
     show_weather_bubbles = True
@@ -504,7 +533,7 @@ def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd
     ]
     deck = pdk.Deck(
         map_style=None,
-        initial_view_state=pdk.ViewState(latitude=53.5, longitude=-124.5, zoom=4.5),
+        initial_view_state=risk_map_pilot_view_state(),
         layers=layers,
         tooltip={"text": "\n".join(tooltip_lines)},
     )
@@ -618,6 +647,11 @@ def _area_municipality_map_tooltip() -> dict[str, str]:
 
 def _area_selection_tab() -> None:
     st.subheader("Area selection (PoC)")
+    st.info(
+        f"**PoC pilot region: {DEMO_PILOT_MUNICIPALITY}** — BC Hydro region "
+        f"**{DEMO_PILOT_BC_HYDRO_REGION}**. Tables and maps default to municipality view "
+        f"with **{DEMO_PILOT_MUNICIPALITY}** at the top; all other areas remain available."
+    )
     region_df, region_source = load_region_outage_summary()
     mun_df, mun_source = load_municipality_outage_summary()
 
@@ -645,6 +679,7 @@ def _area_selection_tab() -> None:
         "Rank by",
         ["BC Hydro region", "Municipality (top hotspots)"],
         horizontal=True,
+        key="area_selection_default_view",
     )
     is_region_view = view == "BC Hydro region"
     ranked = pd.DataFrame()
@@ -654,10 +689,16 @@ def _area_selection_tab() -> None:
     if is_region_view:
         if not region_df.empty:
             display_cols = select_display_columns(region_df, municipality=False)
-            ranked = region_df.sort_values("unique_outages", ascending=False)
+            ranked = promote_pilot_row(
+                region_df.sort_values("unique_outages", ascending=False),
+                municipality=False,
+            )
     elif not mun_df.empty:
         display_cols = select_display_columns(mun_df, municipality=True)
-        ranked = mun_df.sort_values("unique_outages", ascending=False).head(25)
+        ranked = promote_pilot_row(
+            mun_df.sort_values("unique_outages", ascending=False).head(25),
+            municipality=True,
+        )
 
     col_table, col_map = st.columns([1, 1.35])
     table_state = None
@@ -672,7 +713,11 @@ def _area_selection_tab() -> None:
                 else "No municipality summary available."
             )
         else:
-            st.caption("Click a row to zoom the map to that area.")
+            st.caption(
+                f"Click a row to zoom the map to that area. "
+                f"**{DEMO_PILOT_MUNICIPALITY}** is listed first in municipality view "
+                f"({DEMO_PILOT_BC_HYDRO_REGION} first in region view)."
+            )
             table_state = st.dataframe(
                 ranked[display_cols],
                 column_config=_area_selection_column_config(),
@@ -687,6 +732,7 @@ def _area_selection_tab() -> None:
     selected_id: str | None = None
     selected_coords: tuple[float, float] | None = None
     missing_coords = False
+    use_pilot_default_map = False
     if table_state is not None and table_state.selection.rows:
         row_idx = table_state.selection.rows[0]
         row = ranked.iloc[row_idx]
@@ -698,6 +744,17 @@ def _area_selection_tab() -> None:
             selected_coords = lookup_municipality_coordinates(selected_id)
         if selected_coords is None:
             missing_coords = True
+    elif not ranked.empty:
+        use_pilot_default_map = True
+        if is_region_view:
+            selected_id = DEMO_PILOT_BC_HYDRO_REGION
+            selected_coords = lookup_region_coordinates(selected_id)
+        else:
+            selected_id = DEMO_PILOT_MUNICIPALITY
+            selected_coords = lookup_municipality_coordinates(selected_id)
+        if selected_coords is None:
+            missing_coords = True
+            use_pilot_default_map = False
 
     with col_map:
         st.markdown("#### Outage intensity + population")
@@ -767,6 +824,8 @@ def _area_selection_tab() -> None:
                 selected_coords[1],
                 municipality=not is_region_view,
             )
+        elif use_pilot_default_map:
+            view_state = pilot_area_map_view_state(municipality=not is_region_view)
         elif not map_df.empty:
             view_state = fit_area_map_view_state(map_df)
         else:
@@ -794,6 +853,7 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
+    st.success(f"**PoC pilot region: {DEMO_PILOT_MUNICIPALITY}** ({DEMO_PILOT_BC_HYDRO_REGION}) — demo defaults open here; BC-wide data stays available in other tabs.")
     st.markdown("### What this demo shows")
     st.markdown(
         """

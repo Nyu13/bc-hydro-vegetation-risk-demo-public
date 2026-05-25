@@ -5,7 +5,13 @@ import math
 import pandas as pd
 import pydeck as pdk
 
-from src.config import DEMO_DATA_DIR
+from src.config import (
+    DEMO_DATA_DIR,
+    DEMO_PILOT_BC_HYDRO_REGION,
+    DEMO_PILOT_LAT,
+    DEMO_PILOT_LON,
+    DEMO_PILOT_MUNICIPALITY,
+)
 from src.network_loader import load_bc_transmission_paths
 from src.population_loader import load_municipality_population, population_marker_radius
 
@@ -62,6 +68,46 @@ def lookup_municipality_coordinates(municipality: str) -> tuple[float, float] | 
 
 def default_area_map_view_state() -> pdk.ViewState:
     return pdk.ViewState(**BC_DEFAULT_VIEW)
+
+
+def pilot_area_map_view_state(*, municipality: bool = True) -> pdk.ViewState:
+    """Default PoC map view — Surrey / Lower Mainland metro context."""
+    zoom = MUNICIPALITY_SELECTION_ZOOM if municipality else REGION_SELECTION_ZOOM
+    return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=zoom)
+
+
+def risk_map_pilot_view_state() -> pdk.ViewState:
+    """Risk map initial zoom — pilot municipality with regional context."""
+    return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=9.5)
+
+
+def promote_pilot_row(ranked: pd.DataFrame, *, municipality: bool) -> pd.DataFrame:
+    """Move pilot municipality or BC Hydro region to the top without dropping other rows."""
+    if ranked.empty:
+        return ranked
+    key = "municipality" if municipality else "region_name"
+    if key not in ranked.columns:
+        return ranked
+    pilot_name = DEMO_PILOT_MUNICIPALITY if municipality else DEMO_PILOT_BC_HYDRO_REGION
+    if pilot_name not in ranked[key].values:
+        return ranked
+    pilot_rows = ranked.loc[ranked[key] == pilot_name]
+    other_rows = ranked.loc[ranked[key] != pilot_name]
+    return pd.concat([pilot_rows, other_rows], ignore_index=True)
+
+
+def pilot_row_index(ranked: pd.DataFrame, *, municipality: bool) -> int | None:
+    """Zero-based row index of the pilot area in a ranked table, if present."""
+    if ranked.empty:
+        return None
+    key = "municipality" if municipality else "region_name"
+    pilot_name = DEMO_PILOT_MUNICIPALITY if municipality else DEMO_PILOT_BC_HYDRO_REGION
+    if key not in ranked.columns:
+        return None
+    matches = ranked.index[ranked[key] == pilot_name]
+    if matches.empty:
+        return None
+    return int(ranked.index.get_loc(matches[0]))
 
 
 def fit_area_map_view_state(map_df: pd.DataFrame) -> pdk.ViewState:

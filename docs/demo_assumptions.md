@@ -6,6 +6,8 @@ Demo only - uses public and proxy datasets. Final PoC would require BC Hydro int
 
 This dashboard is an illustrative prototype and must not be used for operational switching, dispatching, restoration planning, or customer-impact decision-making.
 
+**PoC pilot region:** Surrey (Lower Mainland) — UI defaults only; bundled data still includes all BC Hydro regions and municipalities.
+
 ## Public/Proxy Data Explanation
 
 - Public outage status sources (JSON/RSS) are used for current/recent visibility.

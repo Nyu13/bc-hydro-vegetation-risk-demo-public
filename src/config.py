@@ -34,3 +34,10 @@ DEMO_DISCLAIMER = DEMO_SECONDARY_DISCLAIMER
 
 DEMO_OFFLINE_MODE = os.getenv("DEMO_OFFLINE_MODE", "0").strip().lower() in {"1", "true", "yes"}
 
+# PoC pilot focus (demo defaults only — BC-wide data and all regions remain available)
+DEMO_PILOT_MUNICIPALITY = "Surrey"
+DEMO_PILOT_BC_HYDRO_REGION = "Lower Mainland"
+# Centroid aligned with demo_corridors.csv / demo_municipality_population.csv
+DEMO_PILOT_LAT = 49.1913
+DEMO_PILOT_LON = -122.8490
+
