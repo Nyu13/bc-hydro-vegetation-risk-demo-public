@@ -96,6 +96,98 @@ def calculate_demo_risk_score(
     return round(float(np.clip(score, 0, 100)), 2)
 
 
+def compute_vegetation_exposure_score(
+    *,
+    vegetation_cover_green_pct: float = 50.0,
+    canopy_cover_pct: float = 45.0,
+    vegetation_change_score: float = 0.35,
+) -> float:
+    """Planet / land-cover exposure: green canopy plus change signal."""
+    green_component = normalize_score(vegetation_cover_green_pct, 0, 90)
+    canopy_component = normalize_score(canopy_cover_pct, 0, 80)
+    change_component = normalize_score(vegetation_change_score, 0, 1.0)
+    score = 0.45 * green_component + 0.40 * canopy_component + 0.15 * change_component
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def compute_vegetation_dryness_score(
+    *,
+    vegetation_cover_brown_pct: float = 20.0,
+    soil_water_content: float = 0.35,
+) -> float:
+    """Dry / stressed vegetation proxy from brown fraction and low soil moisture."""
+    brown_component = normalize_score(vegetation_cover_brown_pct, 0, 60)
+    moisture_stress = normalize_score(1.0 - min(max(soil_water_content, 0.0), 1.0), 0, 1.0)
+    score = 0.55 * brown_component + 0.45 * moisture_stress
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def compute_canopy_exposure_score(
+    *,
+    canopy_cover_pct: float = 45.0,
+    canopy_height_m: float = 12.0,
+) -> float:
+    cover_component = normalize_score(canopy_cover_pct, 0, 80)
+    height_component = normalize_score(canopy_height_m, 0, 35)
+    score = 0.60 * cover_component + 0.40 * height_component
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def compute_heat_drought_stress_score(
+    *,
+    land_surface_temperature_c: float = 22.0,
+    soil_water_content: float = 0.35,
+) -> float:
+    lst_component = normalize_score(land_surface_temperature_c, 5, 45)
+    moisture_stress = normalize_score(1.0 - min(max(soil_water_content, 0.0), 1.0), 0, 1.0)
+    score = 0.65 * lst_component + 0.35 * moisture_stress
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def calculate_surrey_planet_risk_score(
+    weather_severity_score: float,
+    vegetation_exposure_score: float,
+    vegetation_dryness_score: float,
+    public_outage_history_score: float,
+    terrain_access_score: float,
+) -> float:
+    """Surrey PoC composite when Planet sample mode is active."""
+    score = (
+        0.35 * weather_severity_score
+        + 0.30 * vegetation_exposure_score
+        + 0.15 * vegetation_dryness_score
+        + 0.10 * public_outage_history_score
+        + 0.10 * terrain_access_score
+    )
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def calculate_municipality_outage_history_score(priority_score: float) -> float:
+    """Normalize unofficial municipality suggested_priority_score (≈0–1) to 0–100."""
+    return round(float(np.clip(normalize_score(priority_score, 0, 1.0), 0, 100)), 2)
+
+
+def calculate_public_outage_history_score(
+    *,
+    outage_count: int = 0,
+    customers_affected: int = 0,
+    municipality_priority_score: float | None = None,
+    prefer_live: bool = True,
+) -> tuple[float, str]:
+    """Live Surrey density when available; else municipality archive proxy."""
+    if prefer_live and (outage_count > 0 or customers_affected > 0):
+        return (
+            calculate_live_outage_density_score(outage_count, customers_affected),
+            "live_density",
+        )
+    if municipality_priority_score is not None and not pd.isna(municipality_priority_score):
+        return (
+            calculate_municipality_outage_history_score(float(municipality_priority_score)),
+            "municipality_summary",
+        )
+    return 50.0, "default"
+
+
 def assign_risk_level(risk_score: float) -> str:
     if risk_score >= 70:
         return "High"
@@ -110,12 +202,21 @@ def identify_top_risk_driver(row: pd.Series) -> str:
         if row.get("live_outage_density_applied")
         else "Public outage history proxy"
     )
-    driver_map = {
-        "weather_severity_score": "Wind gust / weather severity",
-        "vegetation_exposure_score": "Corridor exposure (demo proxy)",
-        "public_outage_history_score": outage_label,
-        "terrain_access_score": "Terrain/access constraints",
-    }
+    if row.get("surrey_planet_formula_applied"):
+        driver_map = {
+            "weather_severity_score": "Wind gust / weather severity",
+            "vegetation_exposure_score": "Planet vegetation exposure",
+            "vegetation_dryness_score": "Planet vegetation dryness",
+            "public_outage_history_score": outage_label,
+            "terrain_access_score": "Terrain/access constraints",
+        }
+    else:
+        driver_map = {
+            "weather_severity_score": "Wind gust / weather severity",
+            "vegetation_exposure_score": "Corridor exposure (demo proxy)",
+            "public_outage_history_score": outage_label,
+            "terrain_access_score": "Terrain/access constraints",
+        }
     top_key = max(driver_map.keys(), key=lambda key: float(row.get(key, 0)))
     return driver_map[top_key]
 

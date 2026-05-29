@@ -1,0 +1,19 @@
+{
+  "municipal_hectares": 36475.1,
+  "reference_hectares_31600": 31600,
+  "corridor_buffer_hectares": {
+    "100": 1873.1,
+    "200": 3580.0,
+    "300": 5239.1
+  },
+  "outage_subarea_hectares": 3859.3,
+  "transmission_segments_in_sample": 40,
+  "outage_proxy_note": "Surrey ranks #1 in unofficial municipality archive proxy (3651 unique outages, 346 tree-related, priority score 0.705).",
+  "files": [
+    "data\\demo\\surrey_municipal_boundary.geojson",
+    "data/demo/surrey_transmission_buffer_100m.geojson",
+    "data/demo/surrey_transmission_buffer_200m.geojson",
+    "data/demo/surrey_transmission_buffer_300m.geojson",
+    "data\\demo\\surrey_outage_prone_subarea.geojson"
+  ]
+}

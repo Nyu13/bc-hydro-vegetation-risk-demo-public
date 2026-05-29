@@ -8,9 +8,11 @@ This dashboard is an illustrative prototype and must not be used for operational
 
 **PoC pilot region:** Surrey (Lower Mainland) — UI defaults only; bundled data still includes all BC Hydro regions and municipalities.
 
+**Planet / Surrey PoC:** Sidebar **Data mode** controls whether the Planet placeholder CSV participates in scoring. See [surrey_planet_integration_notes.md](surrey_planet_integration_notes.md).
+
 **Risk Map geometry:** **BC Hydro live** `outages-map-data.json` only; outages filtered to **Surrey** (municipality label when present, else `DEMO_PILOT_TRANSMISSION_BBOX`). Flat `polygon` lon/lat pairs are normalized to GeoJSON rings. Point markers appear only when no polygon exists.
 
-**PoC risk score (0–100, illustrative):** `0.40 × live weather_severity_score` (region mean from ECCC when available) `+ 0.30 × corridor exposure` (bundled `demo_corridors.csv` forest/historical/length proxy) `+ 0.20 × Surrey live outage density` (same Surrey-filtered map JSON as the Risk Map: 60% normalized outage count + 40% customers affected, caps in `src/risk_scoring.py`) `+ 0.10 × terrain/access` from demo corridors. Corridor rows stay **synthetic** (🟡); weather and outage density may be **live** (🟢) when fetches succeed.
+**PoC risk score (0–100, illustrative):** Default demo: `0.40 × live weather_severity_score` (region mean from ECCC when available) `+ 0.30 × corridor exposure` (bundled `demo_corridors.csv` forest/historical/length proxy) `+ 0.20 × Surrey live outage density` (same Surrey-filtered map JSON as the Risk Map: 60% normalized outage count + 40% customers affected, caps in `src/risk_scoring.py`) `+ 0.10 × terrain/access` from demo corridors. **Planet sample enabled (Surrey):** `0.35 × weather + 0.30 × Planet vegetation exposure + 0.15 × vegetation dryness + 0.10 × public outage history + 0.10 × terrain/access`. Corridor rows stay **synthetic** (🟡); weather and outage density may be **live** (🟢) when fetches succeed.
 
 ## Public/Proxy Data Explanation
 

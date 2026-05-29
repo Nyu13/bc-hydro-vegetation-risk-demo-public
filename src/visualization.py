@@ -31,16 +31,39 @@ def apply_plotly_chart_theme(fig, *, dark: bool) -> None:
         fig.update_yaxes(color="#212529", gridcolor="#dee2e6", zerolinecolor="#dee2e6")
 
 
-def make_top_drivers_chart(risk_df: pd.DataFrame, *, dark: bool = False):
-    driver_cols = [
-        "weather_severity_score",
-        "vegetation_exposure_score",
-        "public_outage_history_score",
-        "terrain_access_score",
-    ]
-    live_outage = bool(risk_df["live_outage_density_applied"].any()) if "live_outage_density_applied" in risk_df.columns else False
-    means = risk_df[driver_cols].mean().rename(
-        {
+def make_top_drivers_chart(risk_df: pd.DataFrame, *, dark: bool = False, planet_mode: bool = False):
+    if planet_mode or bool(risk_df.get("surrey_planet_formula_applied", pd.Series(dtype=bool)).any()):
+        driver_cols = [
+            "weather_severity_score",
+            "vegetation_exposure_score",
+            "vegetation_dryness_score",
+            "public_outage_history_score",
+            "terrain_access_score",
+        ]
+        labels = {
+            "weather_severity_score": "Wind gust / weather severity",
+            "vegetation_exposure_score": "Planet vegetation exposure",
+            "vegetation_dryness_score": "Planet vegetation dryness",
+            "public_outage_history_score": (
+                "Live Surrey outage density"
+                if bool(risk_df["live_outage_density_applied"].any())
+                else "Public outage history proxy"
+            ),
+            "terrain_access_score": "Terrain/access constraints",
+        }
+    else:
+        driver_cols = [
+            "weather_severity_score",
+            "vegetation_exposure_score",
+            "public_outage_history_score",
+            "terrain_access_score",
+        ]
+        live_outage = (
+            bool(risk_df["live_outage_density_applied"].any())
+            if "live_outage_density_applied" in risk_df.columns
+            else False
+        )
+        labels = {
             "weather_severity_score": "Wind gust / weather severity",
             "vegetation_exposure_score": "Corridor exposure (demo proxy)",
             "public_outage_history_score": (
@@ -48,7 +71,8 @@ def make_top_drivers_chart(risk_df: pd.DataFrame, *, dark: bool = False):
             ),
             "terrain_access_score": "Terrain/access constraints",
         }
-    )
+    present = [c for c in driver_cols if c in risk_df.columns]
+    means = risk_df[present].mean().rename(labels)
     means.loc["Treatment recency placeholder"] = 35.0
     fig = px.bar(
         x=means.index,

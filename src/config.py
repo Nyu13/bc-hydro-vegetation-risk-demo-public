@@ -68,3 +68,21 @@ DEMO_PILOT_MAP_ZOOM = 10.5
 DEMO_PILOT_TRANSMISSION_BBOX = (-123.05, 49.02, -122.65, 49.35)
 
 DEMO_PILOT_DISCLAIMER = f"Defaults: {DEMO_PILOT_MUNICIPALITY} ({DEMO_PILOT_REGION})"
+
+# Demo region selector (Surrey-only for PoC)
+DEMO_REGION_OPTIONS = (f"{DEMO_PILOT_MUNICIPALITY}, BC",)
+
+# Sidebar data mode — controls Planet sample vs public/proxy vs synthetic emphasis
+DEMO_DATA_MODES = (
+    "Public/proxy only",
+    "Planet sample enabled",
+    "Synthetic fallback",
+)
+
+PLANET_SURREY_SAMPLE_CSV = DEMO_DATA_DIR / "planet_surrey_sample_placeholder.csv"
+
+PLANET_POC_DISCLAIMER = (
+    "Planet layers are proposed remote-sensing inputs for the Surrey proof-of-process. "
+    "They do not replace BC Hydro internal outage, feeder/circuit, vegetation treatment, "
+    "asset, or work-management data."
+)

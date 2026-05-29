@@ -1,0 +1,2 @@
+aoi_id,area_hectares,vegetation_cover_green_pct,vegetation_cover_brown_pct,non_vegetation_pct,canopy_cover_pct,canopy_height_m,vegetation_change_score,soil_water_content,land_surface_temperature_c,data_source,data_status
+SURREY-PILOT-001,12450.0,62.4,18.7,18.9,54.2,14.8,0.42,0.31,28.6,Planet placeholder (Surrey PoC sample),placeholder

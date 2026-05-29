@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "surrey_outage_prone_subarea",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "aoi_id": "SURREY-OUTAGE-SUBAREA", "area_hectares": 3859.3, "note": "Demo sub-area (~4 km radius at Surrey centroid); not BC Hydro feeder truth" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -122.813963963963957, 49.15396396396396 ], [ -122.886036036036032, 49.15396396396396 ], [ -122.886036036036032, 49.215685780071205 ], [ -122.884118449966181, 49.217632771630456 ], [ -122.877208788246861, 49.21977870393988 ], [ -122.866775808869235, 49.220825649710491 ], [ -122.855734785264673, 49.220622806688297 ], [ -122.842998121493153, 49.219877109213002 ], [ -122.813963963963957, 49.220280482328256 ], [ -122.813963963963957, 49.15396396396396 ] ] ] } }
+]
+}

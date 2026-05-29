@@ -9,12 +9,17 @@ import streamlit as st
 
 from src.backtesting import compute_backtesting_metrics, load_backtesting_data
 from src.config import (
+    BC_TRANSMISSION_GEOJSON,
+    BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
     DEMO_DATA_DIR,
+    DEMO_DATA_MODES,
     DEMO_OFFLINE_MODE,
     DEMO_PILOT_BC_HYDRO_REGION,
     DEMO_PILOT_MUNICIPALITY,
     DEMO_PILOT_TRANSMISSION_BBOX,
     DEMO_PRIMARY_DISCLAIMER,
+    DEMO_REGION_OPTIONS,
+    PLANET_POC_DISCLAIMER,
 )
 from src.data_provenance import (
     DatasetProvenance,
@@ -58,11 +63,19 @@ from src.network_loader import (
     load_all_demo_corridors,
     load_transmission_lines,
 )
+from src.planet_loader import (
+    PlanetLoadResult,
+    load_planet_surrey_sample,
+    planet_sample_enabled,
+    planet_scores_from_row,
+    validate_data_mode,
+)
 from src.risk_scoring import (
     assign_risk_level,
     calculate_corridor_exposure_score,
     calculate_demo_risk_score,
-    calculate_live_outage_density_score,
+    calculate_public_outage_history_score,
+    calculate_surrey_planet_risk_score,
     identify_top_risk_driver,
     suggest_review_action,
 )
@@ -249,6 +262,15 @@ if "area_selection_default_view" not in st.session_state:
 if "data_refresh_nonce" not in st.session_state:
     st.session_state.data_refresh_nonce = 0
 
+if "demo_region" not in st.session_state:
+    st.session_state.demo_region = DEMO_REGION_OPTIONS[0]
+
+if "demo_data_mode" not in st.session_state:
+    st.session_state.demo_data_mode = DEMO_DATA_MODES[0]
+
+if "planet_disclaimer_shown" not in st.session_state:
+    st.session_state.planet_disclaimer_shown = False
+
 with st.sidebar:
     st.markdown("### Appearance")
     st.radio(
@@ -257,9 +279,52 @@ with st.sidebar:
         horizontal=True,
         key="ui_theme_radio",
     )
+    st.markdown("### PoC pilot")
+    st.selectbox(
+        "Demo region",
+        DEMO_REGION_OPTIONS,
+        key="demo_region",
+    )
+    st.selectbox(
+        "Data mode",
+        DEMO_DATA_MODES,
+        key="demo_data_mode",
+        help=(
+            "Public/proxy only — standard demo scoring without Planet layers. "
+            "Planet sample enabled — Surrey formula with Planet placeholder CSV. "
+            "Synthetic fallback — bundled demo CSVs; Planet sample not loaded."
+        ),
+    )
 
 apply_streamlit_theme(st.session_state.ui_theme_radio)
 _chart_dark = st.session_state.ui_theme_radio == "Dark"
+DEMO_DATA_MODE = validate_data_mode(st.session_state.demo_data_mode)
+PLANET_SAMPLE = load_planet_surrey_sample(DEMO_DATA_MODE)
+SURREY_PLANET_ACTIVE = planet_sample_enabled(DEMO_DATA_MODE) and PLANET_SAMPLE.status in {
+    "placeholder",
+    "loaded",
+}
+
+
+def _show_planet_disclaimer_once() -> None:
+    if st.session_state.planet_disclaimer_shown:
+        return
+    st.info(PLANET_POC_DISCLAIMER)
+    st.session_state.planet_disclaimer_shown = True
+
+
+def _planet_sample_status_label() -> str:
+    return PLANET_SAMPLE.status
+
+
+def _surrey_municipality_outage_row() -> pd.Series | None:
+    mun_df, _ = load_municipality_outage_summary()
+    if mun_df.empty or "municipality" not in mun_df.columns:
+        return None
+    match = mun_df.loc[mun_df["municipality"].astype(str).str.casefold() == DEMO_PILOT_MUNICIPALITY.casefold()]
+    if match.empty:
+        return None
+    return match.iloc[0]
 
 st.title("BC Hydro Vegetation-Weather Outage Risk Demo")
 st.warning(DEMO_PRIMARY_DISCLAIMER)
@@ -460,6 +525,15 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "current_mode": "Bundled demo CSV",
             "fallback_if_unavailable": "data/demo/demo_region_map_context.csv",
         },
+        {
+            "dataset": "Planet Surrey sample (placeholder)",
+            "primary_source_type": "Placeholder remote-sensing proxy",
+            "used_in_demo_for": "Surrey PoC vegetation / canopy / drought stress scores",
+            "current_mode": (
+                f"{DEMO_DATA_MODE} — Planet sample: {_planet_sample_status_label()}"
+            ),
+            "fallback_if_unavailable": "Corridor exposure from demo_corridors.csv (synthetic)",
+        },
     ]
     return pd.DataFrame(rows)
 
@@ -469,7 +543,15 @@ def _prepare_risk_data(
     *,
     pilot_scope: bool = True,
     pilot_outages: pd.DataFrame | None = None,
+    data_mode: str | None = None,
 ) -> pd.DataFrame:
+    mode = validate_data_mode(data_mode or DEMO_DATA_MODE)
+    planet_result = load_planet_surrey_sample(mode)
+    use_planet_formula = planet_sample_enabled(mode) and planet_result.status in {
+        "placeholder",
+        "loaded",
+    }
+
     corridors = load_transmission_lines(pilot_scope=pilot_scope)
     weather = load_weather_cached(
         live_public_only,
@@ -516,16 +598,28 @@ def _prepare_risk_data(
     if not corridor_attrs.empty and "demo_corridor_id" in corridor_attrs.columns:
         merged = merged.merge(corridor_attrs, on="demo_corridor_id", how="left")
 
-    merged["live_outage_density_applied"] = pilot_outages is not None
-    if pilot_outages is not None:
-        metrics = live_outage_metrics(pilot_outages)
-        live_outage_score = calculate_live_outage_density_score(
-            metrics["count"],
-            metrics["customers"],
-        )
-        merged["public_outage_history_score"] = live_outage_score
+    mun_row = _surrey_municipality_outage_row()
+    mun_priority = float(mun_row["suggested_priority_score"]) if mun_row is not None else None
+    metrics = live_outage_metrics(pilot_outages) if pilot_outages is not None else {"count": 0, "customers": 0}
+    outage_score, outage_source = calculate_public_outage_history_score(
+        outage_count=metrics["count"],
+        customers_affected=metrics["customers"],
+        municipality_priority_score=mun_priority,
+        prefer_live=pilot_outages is not None,
+    )
+    merged["live_outage_density_applied"] = outage_source == "live_density"
+    merged["public_outage_history_score"] = outage_score
 
-    def _corridor_exposure_row(row: pd.Series) -> float:
+    planet_scores = planet_scores_from_row(planet_result.row if use_planet_formula else None)
+    merged["surrey_planet_formula_applied"] = use_planet_formula
+    merged["planet_sample_status"] = planet_result.status
+    merged["vegetation_dryness_score"] = planet_scores["vegetation_dryness_score"]
+    merged["canopy_exposure_score"] = planet_scores["canopy_exposure_score"]
+    merged["heat_drought_stress_score"] = planet_scores["heat_drought_stress_score"]
+
+    def _vegetation_exposure_row(row: pd.Series) -> float:
+        if use_planet_formula:
+            return planet_scores["vegetation_exposure_score"]
         if pd.notna(row.get("forest_exposure_score")) and pd.notna(row.get("historical_outage_proxy_score")):
             return calculate_corridor_exposure_score(
                 float(row["forest_exposure_score"]),
@@ -534,33 +628,47 @@ def _prepare_risk_data(
             )
         return float(row.get("vegetation_exposure_score", 50.0))
 
-    merged["vegetation_exposure_score"] = merged.apply(_corridor_exposure_row, axis=1)
+    merged["vegetation_exposure_score"] = merged.apply(_vegetation_exposure_row, axis=1)
     if "corridor_terrain_access_score" in merged.columns:
         merged["terrain_access_score"] = merged["corridor_terrain_access_score"].fillna(
             merged["terrain_access_score"]
         )
 
-    merged["risk_score"] = merged.apply(
-        lambda row: calculate_demo_risk_score(
+    def _risk_score_row(row: pd.Series) -> float:
+        if row.get("surrey_planet_formula_applied"):
+            return calculate_surrey_planet_risk_score(
+                weather_severity_score=row["weather_severity_score"],
+                vegetation_exposure_score=row["vegetation_exposure_score"],
+                vegetation_dryness_score=row["vegetation_dryness_score"],
+                public_outage_history_score=row["public_outage_history_score"],
+                terrain_access_score=row["terrain_access_score"],
+            )
+        return calculate_demo_risk_score(
             weather_severity_score=row["weather_severity_score"],
             vegetation_exposure_score=row["vegetation_exposure_score"],
             public_outage_history_score=row["public_outage_history_score"],
             terrain_access_score=row["terrain_access_score"],
-        ),
-        axis=1,
-    )
+        )
+
+    merged["risk_score"] = merged.apply(_risk_score_row, axis=1)
     merged["risk_level"] = merged["risk_score"].apply(assign_risk_level)
     merged["top_risk_driver"] = merged.apply(identify_top_risk_driver, axis=1)
     merged["suggested_review_action"] = merged.apply(
         lambda row: suggest_review_action(row["risk_level"], row["top_risk_driver"]),
         axis=1,
     )
-    source = (
-        "PoC composite: live weather + Surrey map JSON outage density; "
-        "corridor/terrain from demo_corridors.csv (synthetic)"
-        if merged["live_outage_density_applied"].any()
-        else "demo_risk_scores.csv + demo corridors (synthetic; weather may be live)"
-    )
+    if use_planet_formula:
+        source = (
+            "Surrey PoC: Planet sample + live weather + "
+            f"{'Surrey live outage density' if merged['live_outage_density_applied'].any() else 'municipality outage proxy'}"
+        )
+    elif merged["live_outage_density_applied"].any():
+        source = (
+            "PoC composite: live weather + Surrey map JSON outage density; "
+            "corridor/terrain from demo_corridors.csv (synthetic)"
+        )
+    else:
+        source = "demo_risk_scores.csv + demo corridors (synthetic; weather may be live)"
     return tag_dataframe(
         merged,
         is_synthetic=True,
@@ -1210,8 +1318,355 @@ def _area_selection_tab() -> None:
         )
 
 
+def _surrey_aoi_comparison_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "AOI option": "Surrey municipal boundary",
+                "Area, ha": "36,475",
+                "Recommended use": "Not recommended for first purchase",
+                "Notes": "Too large / expensive for sample",
+            },
+            {
+                "AOI option": "Transmission buffer 100 m",
+                "Area, ha": "1,873",
+                "Recommended use": "Low-cost option",
+                "Notes": "Narrow corridor exposure",
+            },
+            {
+                "AOI option": "Transmission buffer 200 m",
+                "Area, ha": "3,580",
+                "Recommended use": "Recommended first purchase",
+                "Notes": "Best balance",
+            },
+            {
+                "AOI option": "Transmission buffer 300 m",
+                "Area, ha": "5,239",
+                "Recommended use": "Larger option",
+                "Notes": "More context, higher cost",
+            },
+            {
+                "AOI option": "Outage-prone sub-area",
+                "Area, ha": "3,859",
+                "Recommended use": "Alternative",
+                "Notes": "Good if corridor AOI is not accepted",
+            },
+        ]
+    )
+
+
+def _surrey_planet_model_improvement_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Model feature": "Vegetation exposure",
+                "Current demo source": "Synthetic corridor score",
+                "With Planet sample": "Canopy cover / height near corridors",
+            },
+            {
+                "Model feature": "Vegetation dryness",
+                "Current demo source": "Synthetic or unavailable",
+                "With Planet sample": "SWC + LST + greenness/dryness indicators",
+            },
+            {
+                "Model feature": "Change over time",
+                "Current demo source": "Not available",
+                "With Planet sample": "Canopy / vegetation condition change",
+            },
+            {
+                "Model feature": "Corridor risk ranking",
+                "Current demo source": "Weather + public outage proxy",
+                "With Planet sample": "Weather + outage proxy + real remote-sensing vegetation layer",
+            },
+            {
+                "Model feature": "Map layer",
+                "Current demo source": "Synthetic / public proxy",
+                "With Planet sample": "Real AOI-based satellite-derived indicators",
+            },
+        ]
+    )
+
+
+def _surrey_poc_status_table(
+    *,
+    weather_result: WeatherLoadResult,
+    json_provenance: DatasetProvenance,
+    outages_json_df: pd.DataFrame,
+    mun_row: pd.Series | None,
+    planet_status: str,
+) -> pd.DataFrame:
+    if weather_result.is_synthetic or weather_result.df.empty:
+        weather_status = "Cached demo"
+    elif DEMO_OFFLINE_MODE:
+        weather_status = "Cached demo"
+    else:
+        weather_status = "Loaded / live or cached"
+
+    if json_provenance.is_synthetic or outages_json_df.empty:
+        outage_status = "Demo fallback" if not outages_json_df.empty else "Unavailable"
+    elif json_provenance.badge == "🔴 Unavailable":
+        outage_status = "Unavailable"
+    else:
+        outage_status = "Loaded"
+
+    archive_status = "Loaded" if mun_row is not None else "Not loaded"
+
+    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland export)"
+    elif BC_TRANSMISSION_GEOJSON.exists():
+        tx_status = "Loaded / optional (bundled sample)"
+    else:
+        tx_status = "Not loaded"
+
+    planet_label = {
+        "not loaded": "Not loaded",
+        "placeholder": "Placeholder CSV",
+        "loaded": "Loaded",
+    }.get(planet_status, planet_status)
+
+    return pd.DataFrame(
+        [
+            {"Layer": "ECCC weather", "Status": weather_status},
+            {"Layer": "BC Hydro live outage feed", "Status": outage_status},
+            {"Layer": "Unofficial outage archive summary", "Status": archive_status},
+            {"Layer": "Public transmission geometry", "Status": tx_status},
+            {"Layer": "Synthetic vegetation proxy", "Status": "Loaded"},
+            {"Layer": "Planet sample data", "Status": planet_label},
+            {"Layer": "BC Hydro internal outage / feeders / assets", "Status": "Not available"},
+        ]
+    )
+
+
+def _render_surrey_poc_context_expanders(
+    *,
+    pilot_outages: pd.DataFrame,
+    json_provenance: DatasetProvenance,
+    mun_row: pd.Series | None,
+    weather_result: WeatherLoadResult,
+    planet_result: PlanetLoadResult,
+) -> None:
+    with st.expander("Why Surrey was selected"):
+        st.markdown(
+            """
+            - **Pilot geography** — Surrey is a large Lower Mainland municipality with mixed urban–suburban ROW and tree exposure.
+            - **Lower Mainland focus** — aligns with BC Hydro transmission demo corridors and public outage visibility.
+            - **Public data availability** — BC Hydro live outage JSON/RSS, unofficial outage archive snapshots, ECCC weather, and open transmission geometry are accessible for a concept PoC without internal feeds.
+            """
+        )
+
+    with st.expander("Available public outage data"):
+        _render_outage_provenance_alerts(json_provenance)
+        if pilot_outages.empty and mun_row is None:
+            st.info("No live Surrey outages and no unofficial archive municipality row loaded.")
+        else:
+            summary_cols = st.columns(2)
+            with summary_cols[0]:
+                st.markdown("**Live map JSON (Surrey filter)**")
+                if pilot_outages.empty:
+                    st.caption("No current Surrey outages in the live feed.")
+                else:
+                    metrics = live_outage_metrics(pilot_outages)
+                    st.markdown(
+                        f"- Active outages: **{metrics['count']}**\n"
+                        f"- Customers affected: **{metrics['customers']:,}**"
+                    )
+            with summary_cols[1]:
+                st.markdown("**Unofficial archive snapshot (municipality summary)**")
+                if mun_row is None:
+                    st.caption("No Surrey row in municipality summary CSV.")
+                else:
+                    st.markdown(
+                        f"- Unique outages (proxy): **{int(mun_row.get('unique_outages', 0)):,}**\n"
+                        f"- Tree-related count: **{int(mun_row.get('tree_related_outage_count', 0)):,}**\n"
+                        f"- Weather-related count: **{int(mun_row.get('weather_related_outage_count', 0)):,}**\n"
+                        f"- Suggested priority score: **{float(mun_row.get('suggested_priority_score', 0)):.3f}**"
+                    )
+
+    with st.expander("ECCC weather coverage"):
+        st.caption(
+            f"{weather_result.data_source} — observation "
+            f"{weather_result.observation_time or weather_result.last_updated or 'n/a'} UTC"
+        )
+        if weather_result.freshness_warning:
+            st.warning(weather_result.freshness_warning)
+        pilot_weather = filter_weather_pilot_region(weather_result.df)
+        if pilot_weather.empty:
+            st.info("Lower Mainland / Surrey weather slice not loaded in the current mode.")
+        else:
+            st.caption(
+                f"{len(pilot_weather)} weather row(s) for pilot region; mean severity "
+                f"{pilot_weather['weather_severity_score'].mean():.1f} (illustrative)."
+            )
+
+    with st.expander("Public / proxy vegetation layer status"):
+        st.markdown(
+            """
+            - **Corridor forest exposure** — bundled `demo_corridors.csv` scores (🟡 synthetic proxy).
+            - **BC Geographic Warehouse transmission** — optional HV underlay when local GeoJSON is present.
+            - **No public LiDAR / treatment records** — internal vegetation work-management data still required for operations.
+            """
+        )
+
+    with st.expander("Planet sample data status"):
+        st.markdown(f"- Status: **{planet_result.status}**")
+        st.caption(planet_result.detail)
+        if planet_result.row is not None:
+            scores = planet_scores_from_row(planet_result.row)
+            score_cols = st.columns(4)
+            score_cols[0].metric("Vegetation exposure", scores["vegetation_exposure_score"])
+            score_cols[1].metric("Vegetation dryness", scores["vegetation_dryness_score"])
+            score_cols[2].metric("Canopy exposure", scores["canopy_exposure_score"])
+            score_cols[3].metric("Heat / drought stress", scores["heat_drought_stress_score"])
+            st.dataframe(planet_result.df, width="stretch")
+
+
+def _surrey_poc_tab(
+    *,
+    live_public_only: bool,
+    pilot_outages: pd.DataFrame,
+    json_provenance: DatasetProvenance,
+    outages_json_df: pd.DataFrame | None = None,
+) -> None:
+    del live_public_only  # tab uses session-level LIVE_PUBLIC_ONLY via loaders
+    st.subheader("Surrey PoC Sample")
+    _show_planet_disclaimer_once()
+    st.caption(
+        f"Demo region: **{st.session_state.demo_region}** · Data mode: **{DEMO_DATA_MODE}** · "
+        f"Planet sample data: **{_planet_sample_status_label()}**"
+    )
+
+    st.markdown("#### Recommended Planet sample purchase")
+    st.markdown(
+        """
+        - **Preferred AOI:** Surrey transmission corridor buffer
+        - **Recommended buffer:** 200 m
+        - **Approximate area:** 3,580 ha
+        - **Backup low-cost option:** 100 m buffer, 1,873 ha
+        - **Larger option:** 300 m buffer, 5,239 ha
+        - **Alternative AOI:** outage-prone sub-area, 3,859 ha
+        - **Municipal boundary:** 36,475 ha — likely too large for first sample
+        """
+    )
+    st.markdown(
+        "The 200 m corridor buffer is recommended because it is focused on infrastructure exposure, "
+        "small enough for a paid sample, and large enough to test vegetation exposure, canopy structure, "
+        "heat/drought stress, and corridor-level risk ranking."
+    )
+
+    st.markdown("#### AOI comparison")
+    st.dataframe(_surrey_aoi_comparison_df(), width="stretch", hide_index=True)
+
+    st.markdown("#### Requested Planet products (PoC scope)")
+    st.markdown(
+        """
+        - **Forest Carbon Monitoring / forest structure** — canopy cover and canopy height (3 m, quarterly)
+        - **Soil Water Content** — 100 m preferred
+        - **Land Surface Temperature** — 100 m preferred
+        - **ARPS or PlanetScope-derived vegetation condition indicators**
+        - **Greenness/dryness or green/brown/non-vegetation indicators** if available as derived analytics
+        - **Temporal change** — canopy change, vegetation change, recent vs historical comparison
+        """
+    )
+    st.caption(
+        "Planet documentation review found no standalone Planet catalog product named “Vegetation Cover”; "
+        "green/brown/non-vegetation indicators should be requested as derived analytics from ARPS, "
+        "PlanetScope, or another appropriate workflow."
+    )
+
+    st.markdown("#### How Planet data improves the model")
+    st.dataframe(_surrey_planet_model_improvement_df(), width="stretch", hide_index=True)
+
+    st.markdown("#### What Planet data does not replace")
+    st.markdown(
+        """
+        - BC Hydro internal outage history
+        - Feeder / circuit topology
+        - Asset condition
+        - Vegetation treatment records
+        - Work management data
+        - Restoration / crew response data
+        - Customer interruption metrics such as SAIDI, SAIFI, CAIDI
+        """
+    )
+    st.markdown(
+        "Planet can strengthen the vegetation and environmental exposure layer, but Fujitsu still needs "
+        "to integrate it with weather, outage, network, and operational data to produce decision support."
+    )
+
+    with st.expander("Questions for Planet"):
+        for question in (
+            "Can you quote the Surrey 200 m transmission corridor buffer, approx. 3,580 ha?",
+            "Is 100 m / 200 m / 300 m corridor buffer pricing different only by hectare?",
+            "Which products are available for Surrey, BC?",
+            "Can you provide FCM canopy cover and canopy height at 3 m?",
+            "Can you provide SWC and LST at 100 m?",
+            "Can you provide greenness/dryness or green/brown/non-vegetation indicators through ARPS or PlanetScope-derived analytics?",
+            "Can outputs be delivered as GeoTIFF, CSV summary, API, cloud delivery, or ArcGIS-compatible layer?",
+            "Can results be summarized by our AOI / corridor buffer?",
+            "Can Fujitsu use derived outputs in internal and client-facing proof-of-process demos?",
+            "Is there any trial/sample option before paid purchase?",
+        ):
+            st.markdown(f"- {question}")
+
+    st.markdown("#### Data mode explanation")
+    st.markdown(
+        f"""
+        **Public/proxy only** — Uses ECCC weather, BC Hydro public outage feeds, unofficial outage archive
+        summaries, public transmission geometry, and synthetic vegetation scores.
+
+        **Planet sample enabled** — Replaces synthetic vegetation assumptions with Planet-derived canopy,
+        vegetation condition, soil moisture, and land surface temperature indicators for the Surrey AOI.
+
+        **BC Hydro internal mode — future** — Would use internal outage history, feeders/circuits,
+        vegetation treatment records, asset data, and work-management data.
+        """
+    )
+
+    st.markdown("#### Recommended next action")
+    st.info(
+        "Ask Planet for a quote for the Surrey 200 m transmission corridor buffer, approximately 3,580 ha, "
+        "with FCM canopy cover/height, SWC 100 m, LST 100 m, and ARPS/PlanetScope-derived vegetation "
+        "condition indicators. Use the result to replace synthetic vegetation scores in the demo and test "
+        "whether satellite-derived vegetation indicators improve corridor-level risk ranking."
+    )
+
+    weather_result = _load_weather()
+    mun_row = _surrey_municipality_outage_row()
+    planet_result = load_planet_surrey_sample(DEMO_DATA_MODE)
+    province_outages = outages_json_df if outages_json_df is not None else pd.DataFrame()
+
+    st.markdown("#### Layer status")
+    st.dataframe(
+        _surrey_poc_status_table(
+            weather_result=weather_result,
+            json_provenance=json_provenance,
+            outages_json_df=province_outages,
+            mun_row=mun_row,
+            planet_status=planet_result.status,
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    _render_surrey_poc_context_expanders(
+        pilot_outages=pilot_outages,
+        json_provenance=json_provenance,
+        mun_row=mun_row,
+        weather_result=weather_result,
+        planet_result=planet_result,
+    )
+
+
 tabs = st.tabs(
-    ["Overview", "Risk Dashboard", "Risk Map", "Area selection", "Backtesting", "Data Sources & Assumptions"]
+    [
+        "Overview",
+        "Risk Dashboard",
+        "Risk Map",
+        "Area selection",
+        "Surrey PoC Sample",
+        "Backtesting",
+        "Data Sources & Assumptions",
+    ]
 )
 
 with tabs[0]:
@@ -1242,11 +1697,13 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("Risk Dashboard")
+    if SURREY_PLANET_ACTIVE:
+        _show_planet_disclaimer_once()
     weather_result = _load_weather()
     weather_df = weather_result.df
     outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
     pilot_outages = _filter_outages_for_risk_map(outages_json_df)
-    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages)
+    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages, data_mode=DEMO_DATA_MODE)
     json_prov = provenance_from_frame(
         outages_json_df,
         default_label="BC Hydro outage JSON",
@@ -1263,7 +1720,8 @@ with tabs[1]:
     obs_time = weather_result.observation_time or weather_result.last_updated
     st.caption(
         f"{provenance_badge(True)} Risk · {weather_prov.badge} Weather ({obs_time} UTC) · "
-        f"{json_prov.badge} Outages (map JSON, {DEMO_PILOT_MUNICIPALITY})"
+        f"{json_prov.badge} Outages (map JSON, {DEMO_PILOT_MUNICIPALITY}) · "
+        f"Planet sample data: **{_planet_sample_status_label()}** · Data mode: **{DEMO_DATA_MODE}**"
     )
     if weather_result.freshness_warning:
         st.warning(weather_result.freshness_warning)
@@ -1301,7 +1759,10 @@ with tabs[1]:
     )
 
     st.markdown("#### Top risk drivers")
-    st.plotly_chart(make_top_drivers_chart(risk_df, dark=_chart_dark), width="stretch")
+    st.plotly_chart(
+        make_top_drivers_chart(risk_df, dark=_chart_dark, planet_mode=SURREY_PLANET_ACTIVE),
+        width="stretch",
+    )
     with st.expander(f"Show regional weather input data — {weather_prov.badge}"):
         if weather_df.empty:
             st.info("No weather rows loaded in the current mode.")
@@ -1317,7 +1778,7 @@ with tabs[1]:
 with tabs[2]:
     outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
     pilot_outages = _filter_outages_for_risk_map(outages_json_df)
-    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages)
+    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages, data_mode=DEMO_DATA_MODE)
     _risk_map_tab(
         risk_df,
         outages_json_df,
@@ -1333,6 +1794,21 @@ with tabs[3]:
     _area_selection_tab()
 
 with tabs[4]:
+    outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
+    pilot_outages = _filter_outages_for_risk_map(outages_json_df)
+    _surrey_poc_tab(
+        live_public_only=LIVE_PUBLIC_ONLY,
+        pilot_outages=pilot_outages,
+        outages_json_df=outages_json_df,
+        json_provenance=provenance_from_frame(
+            outages_json_df,
+            default_label="BC Hydro outage JSON",
+            default_source="not loaded",
+            live_public_only=LIVE_PUBLIC_ONLY,
+        ),
+    )
+
+with tabs[5]:
     st.subheader("Backtesting")
     st.warning("Synthetic demo backtesting only — not validated historical outage performance.")
     st.caption(f"{provenance_badge(True)} No public live backtesting feed — `demo_backtesting.csv` only.")
@@ -1356,7 +1832,7 @@ with tabs[4]:
     with st.expander(f"Show backtesting input table — {provenance_badge(True)}"):
         _show_dataframe_with_provenance(backtesting_df, alt_highlight=True)
 
-with tabs[5]:
+with tabs[6]:
     st.subheader("Data sources & assumptions")
     st.markdown(
         """
