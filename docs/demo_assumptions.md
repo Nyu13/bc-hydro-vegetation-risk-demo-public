@@ -19,8 +19,8 @@ This dashboard is an illustrative prototype and must not be used for operational
 - Public outage status sources (JSON/RSS) are used for current/recent visibility.
 - Unofficial public snapshot archive is used only as a historical proxy reference.
 - Public transmission geometry is treated as corridor proxy, not feeder topology.
-- Demo corridor risk markers (`demo_corridors.csv`) remain **synthetic**; optional BC Geographic Warehouse overlay prefers `data/processed/bc_transmission_lines_lower_mainland.geojson` (local WFS export) and falls back to `data/demo/demo_bc_transmission_lines_sample.geojson`.
-- **Refresh transmission overlay:** `python TMP/scripts/fetch_bc_transmission_layer.py` (full Lower Mainland WFS layer); bundled sample: `python TMP/scripts/export_bc_transmission_sample.py --lower-mainland`.
+- Demo corridor risk markers (`demo_corridors.csv`) remain **synthetic**; optional BC Geographic Warehouse overlay resolves: `data/processed/bc_transmission_lines_bc.geojson` (BC-wide), then `data/processed/bc_transmission_lines_lower_mainland.geojson`, then `data/demo/bc_transmission_lines_lower_mainland.geojson` (commit for Streamlit Cloud), then `data/demo/demo_bc_transmission_lines_sample.geojson` (~120 lines).
+- **Refresh transmission overlay:** `python TMP/scripts/fetch_bc_transmission_layer.py` (Lower Mainland); `python TMP/scripts/fetch_bc_transmission_layer.py --full-province` (BC-wide); copy processed LM export to `data/demo/bc_transmission_lines_lower_mainland.geojson` for Cloud deploys.
 - Public weather data is used for storm severity context.
 - Public land-cover sources are used as vegetation exposure proxy.
 

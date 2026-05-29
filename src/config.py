@@ -14,13 +14,18 @@ DOCS_DIR = PROJECT_ROOT / "docs"
 # BC Geographic Warehouse transmission lines (optional local KML/WFS; bundled sample for Cloud)
 BC_TRANSMISSION_KML = DATA_DIR / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
 BC_TRANSMISSION_GEOJSON = DEMO_DATA_DIR / "demo_bc_transmission_lines_sample.geojson"
+BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON = (
+    DEMO_DATA_DIR / "bc_transmission_lines_lower_mainland.geojson"
+)
 BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON = (
     PROCESSED_DATA_DIR / "bc_transmission_lines_lower_mainland.geojson"
 )
+BC_TRANSMISSION_BC_GEOJSON = PROCESSED_DATA_DIR / "bc_transmission_lines_bc.geojson"
 BC_TRANSMISSION_WFS_URL = "https://openmaps.gov.bc.ca/geo/pub/wfs"
 BC_TRANSMISSION_WFS_LAYER = "pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP"
 # WFS bbox filters must use EPSG:3005; this WGS84 box matches the demo / export scripts
 BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84 = (-123.25, 49.05, -122.35, 49.45)
+BC_TRANSMISSION_PROVINCE_BBOX_WGS84 = (-139.06, 48.30, -114.03, 60.00)
 
 BC_HYDRO_OUTAGE_JSON_URL = "https://www.bchydro.com/power-outages/app/outages-map-data.json"
 BC_HYDRO_OUTAGE_RSS_URL = "https://www.bchydro.com/rss/outages/all.xml"

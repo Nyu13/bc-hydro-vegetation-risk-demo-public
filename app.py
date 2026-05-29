@@ -9,7 +9,9 @@ import streamlit as st
 
 from src.backtesting import compute_backtesting_metrics, load_backtesting_data
 from src.config import (
+    BC_TRANSMISSION_BC_GEOJSON,
     BC_TRANSMISSION_GEOJSON,
+    BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
     DEMO_DATA_DIR,
     DEMO_DATA_MODES,
@@ -63,7 +65,9 @@ from src.area_selection import (
 )
 from src.network_loader import (
     BC_TRANSMISSION_UI_LABEL,
+    bc_transmission_geojson_source,
     load_all_demo_corridors,
+    load_bc_transmission_paths,
     load_transmission_lines,
 )
 from src.planet_loader import (
@@ -490,8 +494,14 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "dataset": "BC transmission lines (optional overlay)",
             "primary_source_type": "Public — BC Geographic Warehouse / Geo.ca",
             "used_in_demo_for": "Optional PathLayer — HV reference underlay (Lower Mainland WFS export when present)",
-            "current_mode": "data/processed/bc_transmission_lines_lower_mainland.geojson, else bundled sample",
-            "fallback_if_unavailable": "data/demo/demo_bc_transmission_lines_sample.geojson",
+            "current_mode": (
+                "data/processed/bc_transmission_lines_bc.geojson (BC-wide), "
+                "else Lower Mainland processed/bundled, else demo sample"
+            ),
+            "fallback_if_unavailable": (
+                "data/demo/bc_transmission_lines_lower_mainland.geojson, "
+                "then data/demo/demo_bc_transmission_lines_sample.geojson"
+            ),
         },
         {
             "dataset": "Backtesting",
@@ -950,6 +960,14 @@ def _risk_map_tab(
     ctrl1, ctrl2, ctrl3 = st.columns(3)
     with ctrl1:
         show_bc_lines = st.checkbox(BC_TRANSMISSION_UI_LABEL, value=False)
+    if show_bc_lines:
+        tx_paths = load_bc_transmission_paths()
+        st.caption(
+            f"Transmission overlay: **{bc_transmission_geojson_source()}** "
+            f"({len(tx_paths)} path segment(s)). "
+            "Lower Mainland WFS export by default; run "
+            "`python TMP/scripts/fetch_bc_transmission_layer.py --full-province` for BC-wide."
+        )
     with ctrl2:
         show_corridor_markers = st.checkbox("Corridor risk markers", value=False)
     with ctrl3:
@@ -989,7 +1007,7 @@ def _risk_map_tab(
     layers: list[pdk.Layer] = []
 
     if show_bc_lines:
-        bc_layer = bc_transmission_path_layer(clip_to_pilot_bbox=True)
+        bc_layer = bc_transmission_path_layer()
         if bc_layer is not None:
             layers.append(bc_layer)
 
@@ -1219,9 +1237,15 @@ def _area_selection_tab() -> None:
             value=False,
             help=(
                 "BC Geographic Warehouse HV transmission lines (reference overlay). "
-                f"Clipped to the **{DEMO_PILOT_MUNICIPALITY}** pilot bbox when enabled."
+                "Shows all lines in the loaded GeoJSON (Lower Mainland bundled export by default)."
             ),
         )
+        if show_bc_lines:
+            tx_paths = load_bc_transmission_paths()
+            st.caption(
+                f"Transmission overlay: **{bc_transmission_geojson_source()}** "
+                f"({len(tx_paths)} path segment(s))."
+            )
         layers: list[pdk.Layer] = []
         if show_bc_lines:
             bc_layer = bc_transmission_path_layer()
@@ -1420,10 +1444,14 @@ def _surrey_free_data_fallback_table(
 
     archive_status = "Loaded" if mun_row is not None else "Not loaded"
 
-    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
-        tx_status = "Loaded (Lower Mainland export)"
+    if BC_TRANSMISSION_BC_GEOJSON.exists():
+        tx_status = "Loaded (BC-wide export)"
+    elif BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland processed)"
+    elif BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland bundled)"
     elif BC_TRANSMISSION_GEOJSON.exists():
-        tx_status = "Loaded / optional (bundled sample)"
+        tx_status = "Loaded (demo sample ~120 lines)"
     else:
         tx_status = "Not loaded"
 
@@ -1526,10 +1554,14 @@ def _surrey_poc_status_table(
 
     archive_status = "Loaded" if mun_row is not None else "Not loaded"
 
-    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
-        tx_status = "Loaded (Lower Mainland export)"
+    if BC_TRANSMISSION_BC_GEOJSON.exists():
+        tx_status = "Loaded (BC-wide export)"
+    elif BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland processed)"
+    elif BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland bundled)"
     elif BC_TRANSMISSION_GEOJSON.exists():
-        tx_status = "Loaded / optional (bundled sample)"
+        tx_status = "Loaded (demo sample ~120 lines)"
     else:
         tx_status = "Not loaded"
 

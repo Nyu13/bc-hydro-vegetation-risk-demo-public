@@ -7,8 +7,11 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import (
+    BC_TRANSMISSION_BC_GEOJSON,
     BC_TRANSMISSION_GEOJSON,
     BC_TRANSMISSION_KML,
+    BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84,
+    BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
     DEMO_DATA_DIR,
     DEMO_PILOT_MUNICIPALITY,
@@ -53,10 +56,15 @@ def load_all_demo_corridors() -> pd.DataFrame:
 
 def resolve_bc_transmission_geojson() -> Path | None:
     """
-    Prefer local WFS export (data/processed/) when present; else bundled demo sample.
+    Prefer local WFS exports (data/processed/) when present; else bundled Lower Mainland;
+    else small demo sample for offline/legacy deploys.
     """
+    if BC_TRANSMISSION_BC_GEOJSON.exists():
+        return BC_TRANSMISSION_BC_GEOJSON
     if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
         return BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON
+    if BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON.exists():
+        return BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON
     if BC_TRANSMISSION_GEOJSON.exists():
         return BC_TRANSMISSION_GEOJSON
     return None
@@ -67,9 +75,26 @@ def bc_transmission_geojson_source() -> str:
     path = resolve_bc_transmission_geojson()
     if path is None:
         return "unavailable"
+    if path == BC_TRANSMISSION_BC_GEOJSON:
+        return "processed BC-wide WFS export"
     if path == BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON:
         return "processed Lower Mainland WFS export"
-    return "bundled demo sample"
+    if path == BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON:
+        return "bundled Lower Mainland WFS export"
+    return "bundled demo sample (subset)"
+
+
+def transmission_overlay_bbox(*, clip_to_pilot: bool = False) -> tuple[float, float, float, float] | None:
+    """
+    Optional map clip. Full exports are shown unclipped unless clip_to_pilot is requested.
+    The small demo sample uses the Lower Mainland bbox so lines stay near the pilot map.
+    """
+    if clip_to_pilot:
+        return DEMO_PILOT_TRANSMISSION_BBOX
+    path = resolve_bc_transmission_geojson()
+    if path == BC_TRANSMISSION_GEOJSON:
+        return BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84
+    return None
 
 
 def _coords_to_path(coords: list) -> list[list[float]]:
@@ -113,9 +138,8 @@ def load_bc_transmission_paths(
     geojson_path = resolve_bc_transmission_geojson()
     if geojson_path is None:
         LOGGER.warning(
-            "BC transmission GeoJSON missing (expected %s or %s)",
-            BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
-            BC_TRANSMISSION_GEOJSON,
+            "BC transmission GeoJSON missing (expected processed, bundled LM, or demo sample under %s)",
+            DEMO_DATA_DIR,
         )
         return pd.DataFrame()
     try:

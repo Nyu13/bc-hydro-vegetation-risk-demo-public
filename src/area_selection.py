@@ -15,7 +15,7 @@ from src.config import (
     DEMO_PILOT_REGION,
     DEMO_PILOT_TRANSMISSION_BBOX,
 )
-from src.network_loader import load_bc_transmission_paths
+from src.network_loader import load_bc_transmission_paths, transmission_overlay_bbox
 from src.population_loader import load_municipality_population, population_marker_radius
 
 # Default BC-wide view when nothing is selected.
@@ -341,11 +341,12 @@ def prepare_municipality_hotspot_map_df(
     return merged
 
 
-def bc_transmission_path_layer(*, clip_to_pilot_bbox: bool = True) -> pdk.Layer | None:
+def bc_transmission_path_layer(*, clip_to_pilot_bbox: bool = False) -> pdk.Layer | None:
     """
-    Optional map underlay: BC Geographic Warehouse HV transmission lines (BC-wide reference).
+    Optional map underlay: BC Geographic Warehouse HV transmission lines (reference).
+    Defaults to all lines in the resolved GeoJSON (no pilot bbox clip).
     """
-    bbox = DEMO_PILOT_TRANSMISSION_BBOX if clip_to_pilot_bbox else None
+    bbox = transmission_overlay_bbox(clip_to_pilot=clip_to_pilot_bbox)
     paths_df = load_bc_transmission_paths(bbox=bbox)
     if paths_df.empty:
         return None

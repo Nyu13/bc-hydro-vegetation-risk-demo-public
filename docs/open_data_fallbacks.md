@@ -2,7 +2,7 @@
 
 Public and proxy datasets used when Planet is unavailable, in **Public/proxy only** sidebar mode, or for cross-checking licensed Planet layers. Planet is enrichment — not a replacement for BC Hydro internal data.
 
-See also: [data_sources.md](data_sources.md), [planet_products_for_surrey.md](planet_products_for_surrey.md).
+See also: [data_sources.md](data_sources.md), [planet_products_for_surrey.md](planet_products_for_surrey.md), [open_free_data_for_surrey.md](open_free_data_for_surrey.md) (Surrey catalogue + feature mapping), [free_data_integration_plan.md](free_data_integration_plan.md) (implementation order).
 
 ---
 
