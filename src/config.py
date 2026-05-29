@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import os
 import sys
@@ -80,6 +82,11 @@ DEMO_DATA_MODES = (
 )
 
 PLANET_SURREY_SAMPLE_CSV = DEMO_DATA_DIR / "planet_surrey_sample_placeholder.csv"
+
+# Optional processed open/free data outputs (see docs/free_data_integration_plan.md)
+SURREY_WORLDCOVER_STATS_CSV = PROCESSED_DATA_DIR / "surrey_worldcover_corridor_stats.csv"
+SURREY_FREE_DATA_SUMMARY_CSV = PROCESSED_DATA_DIR / "surrey_free_data_corridor_summary.csv"
+SURREY_SENTINEL2_STATS_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_corridor_stats.csv"
 
 PLANET_POC_DISCLAIMER = (
     "Planet layers are proposed remote-sensing inputs for the Surrey proof-of-process. "

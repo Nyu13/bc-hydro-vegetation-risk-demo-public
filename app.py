@@ -20,6 +20,9 @@ from src.config import (
     DEMO_PRIMARY_DISCLAIMER,
     DEMO_REGION_OPTIONS,
     PLANET_POC_DISCLAIMER,
+    SURREY_FREE_DATA_SUMMARY_CSV,
+    SURREY_SENTINEL2_STATS_CSV,
+    SURREY_WORLDCOVER_STATS_CSV,
 )
 from src.data_provenance import (
     DatasetProvenance,
@@ -1387,6 +1390,118 @@ def _surrey_planet_model_improvement_df() -> pd.DataFrame:
     )
 
 
+def _open_free_layer_status(*paths: Any) -> str:
+    """Return Loaded when any processed open-data artifact exists on disk."""
+    if any(getattr(p, "exists", lambda: False)() for p in paths):
+        return "Loaded (processed CSV)"
+    return "Available (open) — not wired"
+
+
+def _surrey_free_data_fallback_table(
+    *,
+    weather_result: WeatherLoadResult,
+    json_provenance: DatasetProvenance,
+    outages_json_df: pd.DataFrame,
+    mun_row: pd.Series | None,
+) -> pd.DataFrame:
+    if weather_result.is_synthetic or weather_result.df.empty:
+        eccc_status = "Cached demo"
+    elif DEMO_OFFLINE_MODE:
+        eccc_status = "Cached demo"
+    else:
+        eccc_status = "Loaded / live or cached"
+
+    if json_provenance.is_synthetic or outages_json_df.empty:
+        live_outage_status = "Demo fallback" if not outages_json_df.empty else "Unavailable"
+    elif json_provenance.badge == "🔴 Unavailable":
+        live_outage_status = "Unavailable"
+    else:
+        live_outage_status = "Loaded"
+
+    archive_status = "Loaded" if mun_row is not None else "Not loaded"
+
+    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
+        tx_status = "Loaded (Lower Mainland export)"
+    elif BC_TRANSMISSION_GEOJSON.exists():
+        tx_status = "Loaded / optional (bundled sample)"
+    else:
+        tx_status = "Not loaded"
+
+    worldcover_status = _open_free_layer_status(
+        SURREY_WORLDCOVER_STATS_CSV,
+        SURREY_FREE_DATA_SUMMARY_CSV,
+    )
+    sentinel_status = _open_free_layer_status(SURREY_SENTINEL2_STATS_CSV, SURREY_FREE_DATA_SUMMARY_CSV)
+
+    return pd.DataFrame(
+        [
+            {
+                "Layer": "Sentinel-2 (Copernicus CDSE)",
+                "Free source": "Copernicus Data Space — S2 L2A, NDVI/NDMI",
+                "Status": sentinel_status,
+                "Demo use": "Greenness, moisture, vegetation change",
+                "Limitation": "10 m; cloud gaps; processing pipeline required",
+            },
+            {
+                "Layer": "WorldCover / Canada LC (NALCMS)",
+                "Free source": "ESA WorldCover 2021 + NRCan 2020",
+                "Status": worldcover_status,
+                "Demo use": "Static tree/forest/built fractions in corridor AOI",
+                "Limitation": "Annual/static; no near-daily moisture or 3 m canopy",
+            },
+            {
+                "Layer": "LidarBC / City of Surrey LiDAR",
+                "Free source": "portal.lidarbc.ca + data.surrey.ca LiDAR 2022",
+                "Status": "City 2022 available (open) — not wired",
+                "Demo use": "Canopy height, DSM/DEM structure",
+                "Limitation": "Provincial LidarBC sparse in Surrey; large bulk downloads",
+            },
+            {
+                "Layer": "BC VRI",
+                "Free source": "DataBC WHSE_FOREST_VEGETATION.VEG_COMP_LYR_R1_POLY WFS",
+                "Status": "Available (WFS) — not wired",
+                "Demo use": "Stand height, crown closure in forested segments",
+                "Limitation": "Sparse urban coverage; photo inventory not satellite NRT",
+            },
+            {
+                "Layer": "Landsat / MODIS LST",
+                "Free source": "USGS Landsat C2 + NASA MOD11A1",
+                "Status": "Available (open) — not wired",
+                "Demo use": "Land surface temperature / heat stress proxy",
+                "Limitation": "30 m–1 km; gap-filled; coarser than Planet LST 100 m",
+            },
+            {
+                "Layer": "ECCC weather",
+                "Free source": "MSC GeoMet / api.weather.gc.ca",
+                "Status": eccc_status,
+                "Demo use": "Weather severity term in risk formula",
+                "Limitation": "Point/station-based; not land-surface moisture",
+            },
+            {
+                "Layer": "BC Hydro live outages",
+                "Free source": "outages-map-data.json + RSS",
+                "Status": live_outage_status,
+                "Demo use": "Live Surrey outage density",
+                "Limitation": "Snapshot only; no validated cause codes in public feed",
+            },
+            {
+                "Layer": "GitHub outage archive",
+                "Free source": "github.com/outages/bchydro-outages",
+                "Status": archive_status,
+                "Demo use": "Municipality priority / tree-weather proxy counts",
+                "Limitation": "Unofficial; incomplete geography",
+            },
+            {
+                "Layer": "BC transmission geometry",
+                "Free source": "DataBC GBA_TRANSMISSION_LINES_SP WFS",
+                "Status": tx_status,
+                "Demo use": "Corridor AOI buffers and map underlay",
+                "Limitation": "HV transmission only; not distribution feeders",
+            },
+        ]
+    )
+
+
 def _surrey_poc_status_table(
     *,
     weather_result: WeatherLoadResult,
@@ -1646,6 +1761,26 @@ def _surrey_poc_tab(
         ),
         width="stretch",
         hide_index=True,
+    )
+
+    st.markdown("#### Free/open data fallback")
+    st.caption(
+        "Public datasets that can stand in for Planet layers during discovery. "
+        "See docs/open_free_data_for_surrey.md and docs/free_data_integration_plan.md."
+    )
+    st.dataframe(
+        _surrey_free_data_fallback_table(
+            weather_result=weather_result,
+            json_provenance=json_provenance,
+            outages_json_df=province_outages,
+            mun_row=mun_row,
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    st.info(
+        "Free/open data can demonstrate the workflow and reduce early purchase risk, "
+        "but it does not replace Planet commercial products or BC Hydro internal operational data."
     )
 
     _render_surrey_poc_context_expanders(
