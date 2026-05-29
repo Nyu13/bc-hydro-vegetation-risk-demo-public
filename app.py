@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import plotly.express as px
 import pydeck as pdk
@@ -10,16 +12,26 @@ from src.config import (
     DEMO_DATA_DIR,
     DEMO_OFFLINE_MODE,
     DEMO_PILOT_BC_HYDRO_REGION,
-    DEMO_PILOT_DISCLAIMER,
     DEMO_PILOT_MUNICIPALITY,
+    DEMO_PILOT_TRANSMISSION_BBOX,
     DEMO_PRIMARY_DISCLAIMER,
-    DEMO_SECONDARY_DISCLAIMER,
+)
+from src.data_provenance import (
+    DatasetProvenance,
+    outage_marker_color,
+    provenance_badge,
+    provenance_from_frame,
+    round_weather_display,
+    style_synthetic_rows,
+    synthetic_risk_fill,
+    tag_dataframe,
 )
 from src.data_sources import DATA_SOURCES
 from src.outage_loader import (
+    live_outage_metrics,
     load_bchydro_outage_json,
     load_bchydro_rss,
-    load_unofficial_outage_snapshots_placeholder,
+    outage_has_polygon_row,
 )
 from src.region_history_loader import (
     load_municipality_outage_summary,
@@ -29,6 +41,8 @@ from src.region_history_loader import (
 from src.area_selection import (
     default_area_map_view_state,
     fit_area_map_view_state,
+    jitter_duplicate_map_coordinates,
+    load_region_map_context,
     lookup_municipality_coordinates,
     lookup_region_coordinates,
     bc_transmission_path_layer,
@@ -46,13 +60,179 @@ from src.network_loader import (
 )
 from src.risk_scoring import (
     assign_risk_level,
+    calculate_corridor_exposure_score,
     calculate_demo_risk_score,
+    calculate_live_outage_density_score,
     identify_top_risk_driver,
     suggest_review_action,
 )
 from src.theme_ui import apply_streamlit_theme
-from src.visualization import apply_plotly_chart_theme, make_top_drivers_chart, risk_color
-from src.weather_loader import load_weather_demo
+from src.visualization import apply_plotly_chart_theme, make_top_drivers_chart
+from src.weather_loader import (
+    WeatherLoadResult,
+    demo_weather_csv_mtime,
+    filter_weather_pilot_region,
+    load_weather_demo,
+)
+
+HISTORICAL_ARCHIVE_THROUGH = "2026-05-19"
+RISK_MAP_OUTAGE_DOT_RADIUS_PX = 8
+RISK_MAP_OUTAGE_POLYGON_FILL_ALPHA = 45
+RISK_MAP_OUTAGE_POLYGON_PICK_FILL_ALPHA = 35
+RISK_MAP_OUTAGE_POLYGON_LINE_ALPHA = 220
+RISK_MAP_OUTAGE_POINT_JITTER_M = 120.0
+RISK_MAP_CORRIDOR_DOT_RADIUS_PX = 5
+
+
+def _pydeck_tooltip(text_field: str = "tooltip_text") -> dict[str, str]:
+    """deck.gl tooltip template; precompose multi-line text in a dataframe column."""
+    return {"text": f"{{{text_field}}}"}
+
+
+def _risk_map_outage_tooltip_lines(row: pd.Series, *, feed_label: str) -> str:
+    lines: list[str] = []
+    outage_id = row.get("outage_id", "")
+    if outage_id is not None and str(outage_id).strip():
+        lines.append(f"Outage: {outage_id}")
+    if feed_label:
+        lines.append(f"Source: {feed_label}")
+    area = row.get("area") or row.get("area_text") or ""
+    if area is not None and str(area).strip():
+        lines.append(f"Area: {area}")
+    for label, key in (
+        ("Municipality", "municipality"),
+        ("Customers", "customers_affected"),
+        ("Cause", "cause"),
+        ("Status", "status"),
+        ("Updated", "updated"),
+    ):
+        value = row.get(key, row.get("timestamp", "")) if key == "updated" else row.get(key, "")
+        if value is not None and str(value).strip():
+            lines.append(f"{label}: {value}")
+    if not any(line.startswith("Updated:") for line in lines):
+        ts = row.get("timestamp", "")
+        if ts is not None and str(ts).strip():
+            lines.append(f"Updated: {ts}")
+    return "\n".join(lines)
+
+
+def _pilot_outage_dot_radius_px(point_count: int) -> int:
+    if point_count <= 1:
+        return 14
+    if point_count <= 5:
+        return 11
+    if point_count <= 15:
+        return 9
+    return RISK_MAP_OUTAGE_DOT_RADIUS_PX
+
+
+def _prepare_outage_map_points(outage_df: pd.DataFrame, *, feed_label: str) -> pd.DataFrame:
+    """Point layer rows only (no polygon geometry); jitter duplicate coordinates for display."""
+    if outage_df.empty:
+        return outage_df
+    frame = _outage_coords_frame(outage_df)
+    point_rows = frame.loc[~frame.apply(outage_has_polygon_row, axis=1)]
+    points = _outage_map_points(point_rows)
+    if points.empty:
+        return points
+    # Only offset stacked centroid fallbacks; keep feed lat/lon exact for map accuracy.
+    has_feed_lat = "latitude" in points.columns and points["latitude"].notna().any()
+    all_feed_coords = has_feed_lat and points["latitude"].notna().all()
+    if not all_feed_coords:
+        points = jitter_duplicate_map_coordinates(
+            points, lat_col="out_lat", lon_col="out_lon", jitter_m=RISK_MAP_OUTAGE_POINT_JITTER_M
+        )
+    elif len(points) > 1:
+        points = jitter_duplicate_map_coordinates(
+            points, lat_col="out_lat", lon_col="out_lon", jitter_m=RISK_MAP_OUTAGE_POINT_JITTER_M
+        )
+    points = points.copy()
+    points["tooltip_text"] = points.apply(
+        lambda row: _risk_map_outage_tooltip_lines(row, feed_label=feed_label),
+        axis=1,
+    )
+    return points
+
+
+def _risk_map_view_coordinates(
+    *,
+    mapped: pd.DataFrame,
+    show_corridor_markers: bool,
+    json_points: pd.DataFrame,
+    rss_points: pd.DataFrame,
+    json_polygons: list[dict],
+) -> tuple[list[float], list[float]]:
+    lats: list[float] = []
+    lons: list[float] = []
+
+    def _add(lat: object, lon: object) -> None:
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+        except (TypeError, ValueError):
+            return
+        lats.append(lat_f)
+        lons.append(lon_f)
+
+    if show_corridor_markers and not mapped.empty:
+        for _, row in mapped.iterrows():
+            _add(row.get("lat"), row.get("lon"))
+    for points in (json_points, rss_points):
+        if points.empty:
+            continue
+        for _, row in points.iterrows():
+            _add(row.get("out_lat"), row.get("out_lon"))
+    for feature in json_polygons:
+        geometry = feature.get("geometry") if isinstance(feature, dict) else None
+        if not isinstance(geometry, dict):
+            continue
+        coords = geometry.get("coordinates")
+        gtype = geometry.get("type")
+        flat: list[tuple[float, float]] = []
+
+        def _walk(values: object) -> None:
+            if not isinstance(values, list) or not values:
+                return
+            if isinstance(values[0], (int, float)):
+                for i in range(0, len(values) - 1, 2):
+                    if i + 1 < len(values):
+                        flat.append((float(values[i + 1]), float(values[i])))
+                return
+            if len(values) >= 2 and all(isinstance(v, (int, float)) for v in values[:2]):
+                flat.append((float(values[1]), float(values[0])))
+                return
+            for item in values:
+                _walk(item)
+
+        if gtype in {"Polygon", "MultiPolygon"}:
+            _walk(coords)
+        for lat, lon in flat:
+            _add(lat, lon)
+    return lats, lons
+
+
+def _risk_map_corridor_tooltip_lines(row: pd.Series) -> str:
+    risk_level = str(row.get("risk_level", "") or "")
+    risk_score = row.get("risk_score", "")
+    risk_line = f"Risk: {risk_level}"
+    if risk_score is not None and str(risk_score).strip() and pd.notna(risk_score):
+        risk_line += f" ({risk_score})"
+    lines = [
+        f"Corridor: {row.get('demo_corridor_id', '')}",
+        risk_line,
+        f"Region: {row.get('region', '')}",
+        f"Municipality: {row.get('municipality', '')}",
+    ]
+    if pd.notna(row.get("weather_severity_score")):
+        lines.append(f"Weather severity: {row.get('weather_severity_score')}")
+    if row.get("live_outage_density_applied") and pd.notna(row.get("public_outage_history_score")):
+        lines.append(f"Outage density (Surrey live): {row.get('public_outage_history_score')}")
+    top_driver = row.get("top_risk_driver")
+    if top_driver:
+        lines.append(f"Top driver: {top_driver}")
+    if row.get("weather_code"):
+        lines.append(f"Weather code: {row.get('weather_code')}")
+    return "\n".join(line for line in lines if line.split(": ", 1)[-1].strip())
 
 
 st.set_page_config(
@@ -65,6 +245,9 @@ if "ui_theme_radio" not in st.session_state:
 
 if "area_selection_default_view" not in st.session_state:
     st.session_state.area_selection_default_view = "Municipality (top hotspots)"
+
+if "data_refresh_nonce" not in st.session_state:
+    st.session_state.data_refresh_nonce = 0
 
 with st.sidebar:
     st.markdown("### Appearance")
@@ -80,23 +263,86 @@ _chart_dark = st.session_state.ui_theme_radio == "Dark"
 
 st.title("BC Hydro Vegetation-Weather Outage Risk Demo")
 st.warning(DEMO_PRIMARY_DISCLAIMER)
-st.info(DEMO_SECONDARY_DISCLAIMER)
-st.caption(DEMO_PILOT_DISCLAIMER)
-st.caption(f"Data mode: {'Offline local demo CSVs' if DEMO_OFFLINE_MODE else 'Online with local CSV fallback'}")
-LIVE_PUBLIC_ONLY = st.toggle(
-    "Live public only (no synthetic fallback for outage JSON/RSS, unofficial snapshots, weather)",
-    value=False,
-    help="When enabled, failed public requests return empty data instead of demo CSV fallback for selected sources.",
-)
-st.caption(
-    "Online mode attempts to use available public data. If unavailable, the app falls back to local "
-    "synthetic demo CSVs so the dashboard remains runnable."
-)
+if DEMO_OFFLINE_MODE:
+    st.caption("Offline mode — bundled demo CSVs.")
 
 
 @st.cache_data(show_spinner=False)
 def load_demo_risk_table() -> pd.DataFrame:
-    return pd.read_csv(DEMO_DATA_DIR / "demo_risk_scores.csv")
+    return tag_dataframe(
+        pd.read_csv(DEMO_DATA_DIR / "demo_risk_scores.csv"),
+        is_synthetic=True,
+        source="demo_risk_scores.csv (no public live risk feed)",
+    )
+
+
+def _weather_number_column_config(df: pd.DataFrame) -> dict:
+    """Streamlit still shows float64 as 4.000000 unless format is set."""
+    config: dict = {}
+    for col in (
+        "wind_gust_kmh",
+        "precipitation_mm",
+        "temperature_c",
+        "weather_severity_score",
+    ):
+        if col in df.columns:
+            config[col] = st.column_config.NumberColumn(format="%.1f")
+    return config
+
+
+def _show_weather_dataframe(
+    df: pd.DataFrame,
+    *,
+    width: str = "stretch",
+    height: int | None = None,
+    **dataframe_kwargs,
+) -> None:
+    """Weather input tables: round metrics, Styler one-decimal format, NumberColumn fallback."""
+    _show_dataframe_with_provenance(
+        df,
+        width=width,
+        height=height,
+        column_config=_weather_number_column_config(df),
+        **dataframe_kwargs,
+    )
+
+
+def _render_outage_provenance_alerts(*provs: DatasetProvenance) -> None:
+    """Surface fetch/fallback/TLS reasons when outage feeds are not live."""
+    for prov in provs:
+        if prov.is_synthetic and "demo fallback because" in prov.detail.lower():
+            st.warning(prov.detail.split("  \n", 1)[0])
+        elif prov.badge == "🔴 Unavailable":
+            st.warning(prov.detail)
+        elif "TLS verify relaxed" in prov.detail:
+            st.info(prov.detail.split("  \n", 1)[0])
+
+
+def _show_dataframe_with_provenance(
+    df: pd.DataFrame,
+    *,
+    width: str = "stretch",
+    height: int | None = None,
+    column_config: dict | None = None,
+    columns: list[str] | None = None,
+    alt_highlight: bool = False,
+    **dataframe_kwargs,
+) -> None:
+    """Render table with amber/pink row highlight for synthetic provenance."""
+    if df.empty:
+        st.info("No rows to display.")
+        return
+    table_df = round_weather_display(df)
+    styled = style_synthetic_rows(table_df, alt=alt_highlight, columns=columns)
+    kwargs = {"width": width, **dataframe_kwargs}
+    if height is not None:
+        kwargs["height"] = height
+    merged_config = {**_weather_number_column_config(table_df), **(column_config or {})}
+    if merged_config:
+        kwargs["column_config"] = merged_config
+    st.dataframe(styled, **kwargs)
+    if "is_synthetic" in df.columns and bool(df["is_synthetic"].any()):
+        st.caption("🟡 Highlighted rows = demo/synthetic data.")
 
 
 @st.cache_data(show_spinner=False)
@@ -110,28 +356,29 @@ def load_outages_rss_cached(live_public_only: bool) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_unofficial_snapshots_cached(live_public_only: bool) -> pd.DataFrame:
-    return load_unofficial_outage_snapshots_placeholder(allow_synthetic_fallback=not live_public_only)
-
-
-@st.cache_data(show_spinner=False)
-def load_weather_cached(live_public_only: bool) -> pd.DataFrame:
+def load_weather_cached(
+    live_public_only: bool,
+    refresh_nonce: int,
+    demo_weather_mtime: float,
+) -> WeatherLoadResult:
     return load_weather_demo(allow_synthetic_fallback=not live_public_only)
+
+
+def _load_weather() -> WeatherLoadResult:
+    return load_weather_cached(
+        LIVE_PUBLIC_ONLY,
+        st.session_state.data_refresh_nonce,
+        demo_weather_csv_mtime(),
+    )
 
 
 with st.sidebar:
     st.markdown("### Live data")
-    if st.button(
-        "Refresh live data",
-        help=(
-            "Clears cached BC Hydro outage JSON/RSS, unofficial snapshots, and weather loader results, "
-            "then refetches on the next render. Does not reload bundled demo corridors, risk scores, "
-            "or area-selection archive CSVs."
-        ),
-    ):
+    LIVE_PUBLIC_ONLY = st.toggle("Live public only", value=False)
+    if st.button("Refresh live data"):
+        st.session_state.data_refresh_nonce += 1
         load_outages_json_cached.clear()
         load_outages_rss_cached.clear()
-        load_unofficial_snapshots_cached.clear()
         load_weather_cached.clear()
         st.rerun()
 
@@ -153,14 +400,7 @@ def _build_data_provenance_table() -> pd.DataFrame:
         {
             "dataset": "BC Hydro outage RSS",
             "primary_source_type": "Real public",
-            "used_in_demo_for": "Optional source checks / feed demo",
-            "current_mode": mode,
-            "fallback_if_unavailable": "data/demo/demo_outages.csv (synthetic proxy)",
-        },
-        {
-            "dataset": "Unofficial outage snapshots (GitHub)",
-            "primary_source_type": "Public proxy (unofficial)",
-            "used_in_demo_for": "Historical outage proxy concept",
+            "used_in_demo_for": "Current outages (live) — Risk Dashboard & Risk Map (map JSON)",
             "current_mode": mode,
             "fallback_if_unavailable": "data/demo/demo_outages.csv (synthetic proxy)",
         },
@@ -172,24 +412,24 @@ def _build_data_provenance_table() -> pd.DataFrame:
             "fallback_if_unavailable": "data/demo/demo_weather.csv (synthetic demo weather)",
         },
         {
-            "dataset": "Corridor geometry",
-            "primary_source_type": "Public-proxy concept",
+            "dataset": "Corridor geometry / risk scores",
+            "primary_source_type": "Synthetic (no public live feed)",
             "used_in_demo_for": "Demo corridor map/ranking",
-            "current_mode": "Synthetic demo records",
-            "fallback_if_unavailable": "data/demo/demo_corridors.csv",
+            "current_mode": "Always synthetic — labeled 🟡 in UI",
+            "fallback_if_unavailable": "data/demo/demo_corridors.csv, demo_risk_scores.csv",
         },
         {
             "dataset": "BC transmission lines (optional overlay)",
             "primary_source_type": "Public — BC Geographic Warehouse / Geo.ca",
-            "used_in_demo_for": "Optional PathLayer — province-wide HV reference underlay",
-            "current_mode": "Bundled WGS84 GeoJSON sample (BC-wide, simplified)",
+            "used_in_demo_for": "Optional PathLayer — HV reference underlay (Lower Mainland WFS export when present)",
+            "current_mode": "data/processed/bc_transmission_lines_lower_mainland.geojson, else bundled sample",
             "fallback_if_unavailable": "data/demo/demo_bc_transmission_lines_sample.geojson",
         },
         {
             "dataset": "Backtesting",
-            "primary_source_type": "Synthetic",
+            "primary_source_type": "Synthetic (no public live feed)",
             "used_in_demo_for": "Illustrative demo vs observed proxy illustration",
-            "current_mode": "Synthetic demo backtesting data",
+            "current_mode": "Always synthetic — labeled 🟡 in UI",
             "fallback_if_unavailable": "data/demo/demo_backtesting.csv",
         },
         {
@@ -224,9 +464,18 @@ def _build_data_provenance_table() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _prepare_risk_data(live_public_only: bool, *, pilot_scope: bool = True) -> pd.DataFrame:
+def _prepare_risk_data(
+    live_public_only: bool,
+    *,
+    pilot_scope: bool = True,
+    pilot_outages: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     corridors = load_transmission_lines(pilot_scope=pilot_scope)
-    weather = load_weather_cached(live_public_only)
+    weather = load_weather_cached(
+        live_public_only,
+        st.session_state.data_refresh_nonce,
+        demo_weather_csv_mtime(),
+    ).df
     risk_df = load_demo_risk_table().copy()
     if pilot_scope and not corridors.empty and "demo_corridor_id" in corridors.columns:
         pilot_ids = set(corridors["demo_corridor_id"])
@@ -246,6 +495,51 @@ def _prepare_risk_data(live_public_only: bool, *, pilot_scope: bool = True) -> p
     )
     merged["weather_severity_score"] = merged["weather_severity_score"].fillna(45.0)
     merged["weather_code"] = merged["weather_code"].fillna("UNKNOWN")
+
+    corridor_attrs = corridors[
+        [
+            c
+            for c in (
+                "demo_corridor_id",
+                "lat",
+                "lon",
+                "municipality",
+                "forest_exposure_score",
+                "historical_outage_proxy_score",
+                "overhead_length_km",
+            )
+            if c in corridors.columns
+        ]
+    ].copy()
+    if "terrain_access_score" in corridors.columns:
+        corridor_attrs["corridor_terrain_access_score"] = corridors["terrain_access_score"].values
+    if not corridor_attrs.empty and "demo_corridor_id" in corridor_attrs.columns:
+        merged = merged.merge(corridor_attrs, on="demo_corridor_id", how="left")
+
+    merged["live_outage_density_applied"] = pilot_outages is not None
+    if pilot_outages is not None:
+        metrics = live_outage_metrics(pilot_outages)
+        live_outage_score = calculate_live_outage_density_score(
+            metrics["count"],
+            metrics["customers"],
+        )
+        merged["public_outage_history_score"] = live_outage_score
+
+    def _corridor_exposure_row(row: pd.Series) -> float:
+        if pd.notna(row.get("forest_exposure_score")) and pd.notna(row.get("historical_outage_proxy_score")):
+            return calculate_corridor_exposure_score(
+                float(row["forest_exposure_score"]),
+                float(row["historical_outage_proxy_score"]),
+                float(row.get("overhead_length_km") or 0.0),
+            )
+        return float(row.get("vegetation_exposure_score", 50.0))
+
+    merged["vegetation_exposure_score"] = merged.apply(_corridor_exposure_row, axis=1)
+    if "corridor_terrain_access_score" in merged.columns:
+        merged["terrain_access_score"] = merged["corridor_terrain_access_score"].fillna(
+            merged["terrain_access_score"]
+        )
+
     merged["risk_score"] = merged.apply(
         lambda row: calculate_demo_risk_score(
             weather_severity_score=row["weather_severity_score"],
@@ -261,79 +555,104 @@ def _prepare_risk_data(live_public_only: bool, *, pilot_scope: bool = True) -> p
         lambda row: suggest_review_action(row["risk_level"], row["top_risk_driver"]),
         axis=1,
     )
-    return merged.merge(
-        corridors[["demo_corridor_id", "lat", "lon", "municipality"]],
-        on="demo_corridor_id",
-        how="left",
+    source = (
+        "PoC composite: live weather + Surrey map JSON outage density; "
+        "corridor/terrain from demo_corridors.csv (synthetic)"
+        if merged["live_outage_density_applied"].any()
+        else "demo_risk_scores.csv + demo corridors (synthetic; weather may be live)"
+    )
+    return tag_dataframe(
+        merged,
+        is_synthetic=True,
+        source=source,
     )
 
 
-def _summary_cards(risk_df: pd.DataFrame, outage_df: pd.DataFrame) -> None:
-    high_count = int((risk_df["risk_level"] == "High").sum())
-    outage_count = int(len(outage_df))
-    customer_col = next(
-        (
-            col
-            for col in ("customers_affected", "customersAffected", "numCustomersOut", "custA")
-            if col in outage_df.columns
-        ),
-        None,
-    )
-    if customer_col is None:
-        customers = 0
-    else:
-        customers = int(pd.to_numeric(outage_df[customer_col], errors="coerce").fillna(0).sum())
-    expected_impact = "Illustrative estimate"
-    cols = st.columns(6)
-    cols[0].metric("Forecast window", "24–72 hours")
-    cols[1].metric("High-risk demo corridors", high_count)
-    cols[2].metric("Forecast confidence", "Demo only")
-    cols[3].metric("Expected outage impact", expected_impact)
-    cols[4].metric("Current public outage count", outage_count)
-    cols[5].metric("Customers affected (public)", f"{customers:,}")
-
-
-def _render_map_legend(
-    *,
-    show_weather_bubbles: bool,
-    show_outage_markers: bool,
+def _summary_cards(
+    risk_df: pd.DataFrame,
+    pilot_outages: pd.DataFrame,
 ) -> None:
-    """Legend matches map layers: filled disks for risk; blue outline for weather when shown."""
-    swatches: list[str] = [
-        '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-        '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;'
-        'background:rgb(220, 53, 69);opacity:0.9;border:1px solid rgba(0,0,0,0.2);"></span>'
-        '<span style="font-size:0.9rem;">High risk</span></div>',
-        '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-        '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;'
-        'background:rgb(255, 193, 7);opacity:0.9;border:1px solid rgba(0,0,0,0.2);"></span>'
-        '<span style="font-size:0.9rem;">Medium risk</span></div>',
-        '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-        '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;'
-        'background:rgb(40, 167, 69);opacity:0.9;border:1px solid rgba(0,0,0,0.2);"></span>'
-        '<span style="font-size:0.9rem;">Low risk</span></div>',
-    ]
-    if show_weather_bubbles:
-        swatches.append(
-            '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-            '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;'
-            "border:3px solid rgb(52, 152, 219);background:transparent;box-sizing:border-box;"
-            '"></span>'
-            '<span style="font-size:0.9rem;">Regional weather context (when shown)</span></div>'
-        )
-    if show_outage_markers:
-        swatches.append(
-            '<div style="display:flex;align-items:center;gap:6px;margin-right:18px;">'
-            '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;'
-            'background:rgb(80, 80, 80);opacity:0.75;border:1px solid rgba(0,0,0,0.2);"></span>'
-            '<span style="font-size:0.9rem;">Public outage (region proxy)</span></div>'
-        )
-    cells = "".join(swatches)
-    st.markdown(
-        f'<div style="display:flex;flex-wrap:wrap;align-items:center;margin:0.35rem 0 0.75rem 0;">'
-        f"<strong>Legend</strong>&nbsp;&nbsp;{cells}</div>",
-        unsafe_allow_html=True,
+    high_count = int((risk_df["risk_level"] == "High").sum())
+    metrics = live_outage_metrics(pilot_outages)
+    outage_count = metrics["count"]
+    customers = metrics["customers"]
+    row1 = st.columns(3)
+    row1[0].metric(
+        "Forecast window",
+        "24–72 h",
+        help="Demo forecast horizon (hours).",
     )
+    row1[1].metric(
+        "High-risk corridors",
+        high_count,
+        help="Demo corridors scored High in the illustrative model.",
+    )
+    row1[2].metric(
+        "Confidence",
+        "Demo",
+        help="Illustrative scoring only—not a calibrated forecast model.",
+    )
+    row2 = st.columns(3)
+    row2[0].metric(
+        "Outage impact",
+        "Illustrative",
+        help="Illustrative expected-impact placeholder—not an outage forecast.",
+    )
+    row2[1].metric(
+        "Public outages",
+        outage_count,
+        help=f"Current count from BC Hydro map JSON in the {DEMO_PILOT_MUNICIPALITY} pilot slice.",
+    )
+    row2[2].metric(
+        "Customers affected",
+        f"{customers:,}",
+        help="Customers affected per public outage feeds (when reported).",
+    )
+
+
+def _render_live_outages_section(
+    outages_json_df: pd.DataFrame,
+    *,
+    json_provenance: DatasetProvenance,
+) -> None:
+    st.markdown("#### Current outages (live)")
+    _render_outage_provenance_alerts(json_provenance)
+    show_feed_details = (
+        json_provenance.is_synthetic
+        or json_provenance.badge == "🔴 Unavailable"
+    )
+    if show_feed_details:
+        with st.expander("Outage feed status", expanded=True):
+            st.markdown(json_provenance.caption)
+    pilot_outages = _filter_outages_for_risk_map(outages_json_df)
+    province_count = len(outages_json_df)
+    pilot_count = len(pilot_outages)
+    if outages_json_df.empty:
+        st.info(
+            "No outage JSON rows. "
+            + (
+                "Live public only is on — no rows loaded. Disable the sidebar toggle for demo CSV fallback, "
+                "or use **Refresh live data** after fixing network/TLS."
+                if LIVE_PUBLIC_ONLY
+                else "Enable fallback (turn off Live public only) or check network/TLS."
+            )
+        )
+        return
+    row_label = "row" if province_count == 1 else "rows"
+    st.caption(f"All regions — map JSON ({province_count} {row_label})")
+    _show_dataframe_with_provenance(outages_json_df)
+    if pilot_count > 0:
+        pilot_row_label = "row" if pilot_count == 1 else "rows"
+        with st.expander(
+            f"{DEMO_PILOT_MUNICIPALITY} — map JSON ({pilot_count} of {province_count} {pilot_row_label})",
+            expanded=False,
+        ):
+            _show_dataframe_with_provenance(pilot_outages)
+    else:
+        st.caption(
+            f"No {DEMO_PILOT_MUNICIPALITY} rows in the current map JSON feed "
+            f"({province_count} province-wide)."
+        )
 
 
 def _area_selection_column_config() -> dict:
@@ -366,186 +685,276 @@ def _area_selection_column_config() -> dict:
     }
 
 
-def _risk_map_tab(risk_df: pd.DataFrame, outage_df: pd.DataFrame, weather_df: pd.DataFrame) -> None:
+def _outage_coords_frame(outage_df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize lat/lon columns for pilot bbox filtering (may still have NaNs)."""
+    if outage_df.empty:
+        return outage_df
+    frame = outage_df.copy()
+    if not {"out_lat", "out_lon"}.issubset(frame.columns):
+        if {"latitude", "longitude"}.issubset(frame.columns):
+            frame["out_lat"] = pd.to_numeric(frame["latitude"], errors="coerce")
+            frame["out_lon"] = pd.to_numeric(frame["longitude"], errors="coerce")
+        else:
+            frame["out_lat"] = pd.NA
+            frame["out_lon"] = pd.NA
+    else:
+        frame["out_lat"] = pd.to_numeric(frame["out_lat"], errors="coerce")
+        frame["out_lon"] = pd.to_numeric(frame["out_lon"], errors="coerce")
+    return frame
+
+
+def _outage_geometry_in_pilot_bbox(feature: object) -> bool:
+    """True when any polygon vertex lies inside DEMO_PILOT_TRANSMISSION_BBOX."""
+    if not isinstance(feature, dict):
+        return False
+    geom = feature.get("geometry")
+    if not isinstance(geom, dict):
+        return False
+    coords = geom.get("coordinates")
+    gtype = geom.get("type")
+    min_lon, min_lat, max_lon, max_lat = DEMO_PILOT_TRANSMISSION_BBOX
+    points: list[tuple[float, float]] = []
+
+    def _collect_pairs(values: object) -> None:
+        if not isinstance(values, list):
+            return
+        if len(values) >= 2 and all(isinstance(v, (int, float)) for v in values[:2]):
+            points.append((float(values[0]), float(values[1])))
+            return
+        for item in values:
+            _collect_pairs(item)
+
+    if gtype in {"Polygon", "MultiPolygon"} and isinstance(coords, list):
+        _collect_pairs(coords)
+    if not points:
+        return False
+    for lon, lat in points:
+        if min_lon <= lon <= max_lon and min_lat <= lat <= max_lat:
+            return True
+    return False
+
+
+def _filter_outages_for_risk_map(outage_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Risk Map scope: Surrey only (DEMO_PILOT_MUNICIPALITY).
+    Rows with a municipality label must match Surrey (case-insensitive).
+    Rows without a municipality use pilot bbox on coordinates or polygon geometry.
+    """
+    if outage_df.empty:
+        return outage_df
+    frame = _outage_coords_frame(outage_df)
+    min_lon, min_lat, max_lon, max_lat = DEMO_PILOT_TRANSMISSION_BBOX
+    pilot_mun = DEMO_PILOT_MUNICIPALITY.casefold()
+    keep_idx: list[Any] = []
+    for idx, row in frame.iterrows():
+        mun_text = str(row.get("municipality", "") or "").strip()
+        if mun_text:
+            if mun_text.casefold() != pilot_mun:
+                continue
+            keep_idx.append(idx)
+            continue
+        lat = row.get("out_lat")
+        lon = row.get("out_lon")
+        if pd.notna(lat) and pd.notna(lon):
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+            except (TypeError, ValueError):
+                lat_f = lon_f = float("nan")
+            if min_lon <= lon_f <= max_lon and min_lat <= lat_f <= max_lat:
+                keep_idx.append(idx)
+                continue
+        if "outage_geojson" in frame.columns and _outage_geometry_in_pilot_bbox(row.get("outage_geojson")):
+            keep_idx.append(idx)
+    return frame.loc[keep_idx].copy()
+
+
+def _outage_map_points(outage_df: pd.DataFrame) -> pd.DataFrame:
+    if outage_df.empty:
+        return outage_df
+    points = outage_df.copy()
+    if {"out_lat", "out_lon"}.issubset(points.columns):
+        points = points.dropna(subset=["out_lat", "out_lon"])
+        return points
+    if {"latitude", "longitude"}.issubset(points.columns):
+        points["out_lat"] = pd.to_numeric(points["latitude"], errors="coerce")
+        points["out_lon"] = pd.to_numeric(points["longitude"], errors="coerce")
+        return points.dropna(subset=["out_lat", "out_lon"])
+    if {"region", "municipality"}.issubset(points.columns):
+        region_centers = load_region_map_context()
+        if not region_centers.empty:
+            points = points.merge(
+                region_centers.rename(columns={"region_name": "region", "lat": "out_lat", "lon": "out_lon"}),
+                on="region",
+                how="left",
+            )
+            return points.dropna(subset=["out_lat", "out_lon"])
+    return pd.DataFrame()
+
+
+def _outage_polygon_features(outage_df: pd.DataFrame, *, feed_label: str = "BC Hydro JSON") -> list[dict]:
+    if outage_df.empty or "outage_geojson" not in outage_df.columns:
+        return []
+    features: list[dict] = []
+    for _, row in outage_df.iterrows():
+        if "outage_has_polygon" in outage_df.columns and not bool(row.get("outage_has_polygon")):
+            continue
+        feature = row.get("outage_geojson")
+        if not isinstance(feature, dict):
+            continue
+        geometry = feature.get("geometry")
+        if not isinstance(geometry, dict):
+            continue
+        if geometry.get("type") not in {"Polygon", "MultiPolygon"}:
+            continue
+        props = dict(feature.get("properties") or {})
+        props.setdefault("outage_id", str(row.get("outage_id", "")))
+        props.setdefault("region", str(row.get("region", "")))
+        props.setdefault("municipality", str(row.get("municipality", "")))
+        props.setdefault("status", str(row.get("status", "")))
+        props.setdefault("cause", str(row.get("cause", "")))
+        props.setdefault("updated", str(row.get("updated", row.get("timestamp", ""))))
+        props.setdefault(
+            "customers_affected",
+            int(pd.to_numeric(row.get("customers_affected", 0), errors="coerce") or 0),
+        )
+        props["tooltip_text"] = _risk_map_outage_tooltip_lines(row, feed_label=feed_label)
+        features.append({"type": "Feature", "geometry": geometry, "properties": props})
+    return features
+
+
+def _risk_map_tab(
+    risk_df: pd.DataFrame,
+    outages_json_df: pd.DataFrame,
+    *,
+    json_provenance: DatasetProvenance,
+) -> None:
     st.subheader("Risk Map")
-    st.caption(
-        f"PoC pilot focus: **{DEMO_PILOT_MUNICIPALITY}** ({DEMO_PILOT_BC_HYDRO_REGION}). "
-        "All BC regions remain in data — adjust filters below."
-    )
-    all_regions = sorted(risk_df["region"].dropna().unique().tolist()) if "region" in risk_df.columns else []
-    default_regions = (
-        [DEMO_PILOT_BC_HYDRO_REGION]
-        if DEMO_PILOT_BC_HYDRO_REGION in all_regions
-        else all_regions
-    )
-    region_filter = st.multiselect(
-        "Filter demo corridors by BC Hydro region",
-        options=all_regions,
-        default=default_regions,
-        help="Defaults to the pilot region; add or remove regions without changing underlying data.",
-    )
-    map_density = st.radio(
-        "Map markers",
-        options=["One circle per demo corridor", "One circle per region (max risk)"],
+    if json_provenance.is_synthetic or json_provenance.badge == "🔴 Unavailable":
+        _render_outage_provenance_alerts(json_provenance)
+    json_before = len(outages_json_df)
+    map_outages = _filter_outages_for_risk_map(outages_json_df)
+    map_after = len(map_outages)
+    map_feed_label = "BC Hydro JSON"
+    ctrl1, ctrl2, ctrl3 = st.columns(3)
+    with ctrl1:
+        show_bc_lines = st.checkbox(BC_TRANSMISSION_UI_LABEL, value=False)
+    with ctrl2:
+        show_corridor_markers = st.checkbox("Corridor risk markers", value=False)
+    with ctrl3:
+        outage_outline_only = st.checkbox("Outline-only polygons", value=True)
+    outage_geometry_mode = st.selectbox(
+        "Outage geometry",
+        options=["Both", "Polygons only", "Points only"],
         index=0,
-        horizontal=True,
-        help="Same region can have several demo corridors (e.g. Lower Mainland has two), each with its own marker. "
-        "When enabled, regional weather appears as a blue outline ring under risk disks.",
-    )
-    show_bc_lines = st.checkbox(
-        BC_TRANSMISSION_UI_LABEL,
-        value=False,
-        help=(
-            "HV transmission lines from BC Geographic Warehouse (reference overlay). "
-            f"When enabled, lines are clipped to the **{DEMO_PILOT_MUNICIPALITY}** pilot bbox by default."
-        ),
-    )
-    st.caption(
-        "Basemap is intentionally disabled for demo stability across corporate networks. "
-        "Map focuses on risk, weather context, and outage-proxy overlays."
     )
     mapped = risk_df.copy()
-    if region_filter and "region" in mapped.columns:
-        mapped = mapped[mapped["region"].isin(region_filter)]
+    if "region" in mapped.columns:
+        mapped = mapped[mapped["region"] == DEMO_PILOT_BC_HYDRO_REGION]
+    if "municipality" in mapped.columns:
+        mapped = mapped[mapped["municipality"] == DEMO_PILOT_MUNICIPALITY]
     if mapped.empty:
-        st.warning("No demo corridors match the selected regions. Clear or broaden the region filter.")
+        st.warning(
+            f"No demo corridors in the pilot ({DEMO_PILOT_MUNICIPALITY}, {DEMO_PILOT_BC_HYDRO_REGION}). "
+            "Check bundled demo_corridors.csv."
+        )
         return
-    mapped["color"] = mapped["risk_level"].apply(risk_color)
-
-    show_weather_bubbles = True
-    if map_density == "One circle per region (max risk)":
-        idx = mapped.groupby("region")["risk_score"].idxmax()
-        mapped = mapped.loc[idx].copy()
-        mapped["demo_corridor_id"] = mapped["region"] + " (max risk)"
-        mapped["color"] = mapped["risk_level"].apply(risk_color)
-        # Avoid double stack: risk marker already encodes region; weather ring duplicates centroid.
-        show_weather_bubbles = False
+    mapped["color"] = mapped["risk_level"].apply(synthetic_risk_fill)
+    mapped["tooltip_text"] = mapped.apply(_risk_map_corridor_tooltip_lines, axis=1)
 
     corridor_layer = pdk.Layer(
         "ScatterplotLayer",
         data=mapped,
         get_position="[lon, lat]",
         get_fill_color="color",
-        get_radius=8000,
+        get_radius=RISK_MAP_CORRIDOR_DOT_RADIUS_PX,
+        radius_units="pixels",
+        radius_min_pixels=RISK_MAP_CORRIDOR_DOT_RADIUS_PX,
+        radius_max_pixels=RISK_MAP_CORRIDOR_DOT_RADIUS_PX,
         pickable=True,
+        tooltip=_pydeck_tooltip(),
     )
 
     layers: list[pdk.Layer] = []
-    show_outage_markers = False
-
-    # No internet basemap layer by design (demo portability).
 
     if show_bc_lines:
-        bc_layer = bc_transmission_path_layer()
+        bc_layer = bc_transmission_path_layer(clip_to_pilot_bbox=True)
         if bc_layer is not None:
             layers.append(bc_layer)
 
-    # Weather: outline-only ring, drawn *under* risk fills so colors do not blend into purple/mud.
-    if (
-        show_weather_bubbles
-        and not weather_df.empty
-        and {"region", "weather_severity_score"}.issubset(weather_df.columns)
-    ):
-        weather_centers = (
-            mapped.groupby("region", as_index=False)[["lat", "lon"]].mean()
-            .merge(
-                weather_df.groupby("region", as_index=False)[
-                    ["wind_gust_kmh", "precipitation_mm", "temperature_c", "weather_severity_score"]
-                ].mean().merge(
-                    weather_df.groupby("region", as_index=False).agg(
-                        weather_code=("weather_code", lambda s: s.mode().iat[0] if not s.mode().empty else "UNKNOWN")
-                    ),
-                    on="region",
-                    how="left",
-                ),
-                on="region",
-                how="left",
+    show_polygons = outage_geometry_mode in {"Both", "Polygons only"}
+    show_points = outage_geometry_mode in {"Both", "Points only"}
+
+    if map_outages.empty:
+        st.warning("No Surrey outages in the current feed.")
+
+    json_polygons = _outage_polygon_features(map_outages, feed_label=map_feed_label)
+    if show_polygons and json_polygons:
+        poly_color = outage_marker_color(json_provenance.is_synthetic)
+        polygon_fill_alpha = (
+            RISK_MAP_OUTAGE_POLYGON_PICK_FILL_ALPHA
+            if outage_outline_only
+            else RISK_MAP_OUTAGE_POLYGON_FILL_ALPHA
+        )
+        layers.append(
+            pdk.Layer(
+                "GeoJsonLayer",
+                data={"type": "FeatureCollection", "features": json_polygons},
+                filled=True,
+                stroked=True,
+                get_fill_color=[poly_color[0], poly_color[1], poly_color[2], polygon_fill_alpha],
+                get_line_color=[poly_color[0], poly_color[1], poly_color[2], RISK_MAP_OUTAGE_POLYGON_LINE_ALPHA],
+                line_width_min_pixels=3,
+                auto_highlight=True,
+                pickable=True,
+                tooltip=_pydeck_tooltip(),
             )
         )
-        if not weather_centers.empty:
-            risk_radius_m = 8000
-            weather_centers["ring_radius"] = weather_centers["weather_severity_score"].fillna(0).apply(
-                lambda s: int(risk_radius_m + 2200 + float(s) * 45)
-            )
-            layers.append(
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    data=weather_centers,
-                    get_position="[lon, lat]",
-                    get_radius="ring_radius",
-                    filled=False,
-                    stroked=True,
-                    get_line_color=[52, 152, 219, 240],
-                    line_width_min_pixels=3,
-                    pickable=False,
-                )
-            )
 
-    if {"region", "municipality"}.issubset(outage_df.columns):
-        region_centers = (
-            mapped.groupby("region", as_index=False)[["lat", "lon"]].mean().rename(columns={"lat": "out_lat", "lon": "out_lon"})
+    map_points = (
+        _prepare_outage_map_points(map_outages, feed_label=map_feed_label) if show_points else pd.DataFrame()
+    )
+    pilot_point_count = len(map_points)
+    outage_dot_radius = _pilot_outage_dot_radius_px(pilot_point_count)
+
+    if show_points and not map_points.empty:
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=map_points,
+                get_position="[out_lon, out_lat]",
+                get_fill_color=outage_marker_color(json_provenance.is_synthetic),
+                get_radius=outage_dot_radius,
+                radius_units="pixels",
+                radius_min_pixels=outage_dot_radius,
+                radius_max_pixels=outage_dot_radius,
+                auto_highlight=True,
+                pickable=True,
+                tooltip=_pydeck_tooltip(),
+            )
         )
-        outage_points = outage_df.merge(region_centers, on="region", how="left")
-        if {"out_lat", "out_lon"}.issubset(outage_points.columns):
-            outage_points = outage_points.dropna(subset=["out_lat", "out_lon"])
-            if not outage_points.empty:
-                show_outage_markers = True
-                layers.append(
-                    pdk.Layer(
-                        "ScatterplotLayer",
-                        data=outage_points,
-                        get_position="[out_lon, out_lat]",
-                        get_fill_color=[80, 80, 80, 120],
-                        get_radius=5000,
-                        pickable=False,
-                    )
-                )
+    if show_corridor_markers:
+        layers.append(corridor_layer)
 
-    layers.append(corridor_layer)
-
-    st.info(
-        "Map shows demo corridor risk using public/proxy data. "
-        f"Default corridors are scoped to **{DEMO_PILOT_MUNICIPALITY}** when present in "
-        "`demo_corridors.csv`; use the region filter or **All BC demo corridors** on the dashboard to broaden. "
-        "This does not represent BC Hydro feeder-level topology."
+    view_lats, view_lons = _risk_map_view_coordinates(
+        mapped=mapped,
+        show_corridor_markers=show_corridor_markers,
+        json_points=map_points,
+        rss_points=pd.DataFrame(),
+        json_polygons=json_polygons if show_polygons else [],
     )
-    _render_map_legend(
-        show_weather_bubbles=show_weather_bubbles,
-        show_outage_markers=show_outage_markers,
-    )
-
-    tooltip_lines = [
-        "Corridor: {demo_corridor_id}",
-        "Risk: {risk_level}",
-        "Score: {risk_score}",
-        "Region: {region}",
-        "Municipality: {municipality}",
-        "Weather severity: {weather_severity_score}",
-        "Weather code: {weather_code}",
-    ]
     deck = pdk.Deck(
         map_style=None,
-        initial_view_state=risk_map_pilot_view_state(),
+        initial_view_state=risk_map_pilot_view_state(lats=view_lats, lons=view_lons),
         layers=layers,
-        tooltip={"text": "\n".join(tooltip_lines)},
+        tooltip=_pydeck_tooltip(),
     )
     st.pydeck_chart(deck, width="stretch")
-    line_parts: list[str] = []
-    if show_bc_lines:
-        line_parts.append(
-            " Blue paths = BC Geographic Warehouse transmission lines (reference overlay)."
-        )
-    line_caption = "".join(line_parts)
-    st.caption(
-        "Colored disks = demo corridor risk (one per corridor, or one per region if aggregated)."
-        " Blue ring = regional weather severity (outline only, under risk). "
-        "Gray disks = public outage markers (under risk)."
-        + line_caption
-    )
+    st.caption(f"{DEMO_PILOT_MUNICIPALITY}: {map_after}/{json_before} live JSON rows · hover for details")
 
 
 def _area_hotspot_map_layers(map_df: pd.DataFrame, *, municipality: bool) -> list[pdk.Layer]:
-    del municipality  # same layer stack; tooltips differ
+    del municipality  # same layer stack; tooltip_text precomposed on map_df
     return [
         pdk.Layer(
             "ScatterplotLayer",
@@ -554,6 +963,7 @@ def _area_hotspot_map_layers(map_df: pd.DataFrame, *, municipality: bool) -> lis
             get_fill_color="outage_color",
             get_radius="outage_radius_m",
             pickable=True,
+            tooltip=_pydeck_tooltip(),
         ),
         pdk.Layer(
             "ScatterplotLayer",
@@ -569,42 +979,8 @@ def _area_hotspot_map_layers(map_df: pd.DataFrame, *, municipality: bool) -> lis
     ]
 
 
-def _area_region_map_tooltip() -> dict[str, str]:
-    return {
-        "text": "\n".join(
-            [
-                "Region: {region_name}",
-                "Unique outages (proxy): {unique_outages}",
-                "Avg customers per outage (max): {avg_customers_per_unique_outage}",
-                "Population (approx): {population_2021}",
-                "Tree-related outages: {tree_related_outage_count}",
-                "Weather-related outages: {weather_related_outage_count}",
-            ]
-        )
-    }
-
-
-def _area_municipality_map_tooltip() -> dict[str, str]:
-    return {
-        "text": "\n".join(
-            [
-                "Municipality: {municipality}",
-                "Region: {region_name}",
-                "Unique outages (proxy): {unique_outages}",
-                "Avg customers per outage (max): {avg_customers_per_unique_outage}",
-                "Population (2021): {population_2021}",
-            ]
-        )
-    }
-
-
 def _area_selection_tab() -> None:
     st.subheader("Area selection (PoC)")
-    st.info(
-        f"**PoC pilot region: {DEMO_PILOT_MUNICIPALITY}** — BC Hydro region "
-        f"**{DEMO_PILOT_BC_HYDRO_REGION}**. Tables and maps default to municipality view "
-        f"with **{DEMO_PILOT_MUNICIPALITY}** at the top; all other areas remain available."
-    )
     region_df, region_source = load_region_outage_summary()
     mun_df, mun_source = load_municipality_outage_summary()
 
@@ -618,20 +994,13 @@ def _area_selection_tab() -> None:
         archive_range = f"{start} to {end}, public archive proxy"
 
     st.warning(
-        f"Unofficial outage archive proxy ({archive_range}) — not BC Hydro–validated event history. "
-        "All outage counts in this tab are **unique outages** (distinct outage_ids), not sums of "
-        "snapshot rows. Population is context only."
+        f"**Historical archive (not live)** — unofficial proxy ({archive_range}) through "
+        f"**{HISTORICAL_ARCHIVE_THROUGH}**. Current outages: **Risk Dashboard** / **Risk Map**."
     )
 
-    metrics_caption = (
-        "**Customer impact:** `avg_customers_per_unique_outage` — mean of peak `num_customers_out` "
-        "per outage_id. **Cause counts:** `tree_related_outage_count` / `weather_related_outage_count` "
-        "— unique outages with that flag on any snapshot row."
-    )
     view = st.radio(
         "Rank by",
         ["BC Hydro region", "Municipality (top hotspots)"],
-        index=1,
         horizontal=True,
         key="area_selection_default_view",
     )
@@ -660,9 +1029,15 @@ def _area_selection_tab() -> None:
     col_table, col_map = st.columns([1, 1.35])
     table_state = None
 
+    table_prov = provenance_from_frame(
+        ranked if not ranked.empty else (region_df if is_region_view else mun_df),
+        default_label="Area selection summary",
+        default_source=table_source,
+    )
+
     with col_table:
         st.markdown("#### Ranked areas")
-        st.caption(f"Source: {table_source}")
+        st.caption(f"{table_prov.badge} Source: {table_source}")
         if ranked.empty:
             st.info(
                 "No region summary available."
@@ -670,13 +1045,11 @@ def _area_selection_tab() -> None:
                 else "No municipality summary available."
             )
         else:
-            st.caption(
-                f"Click a row to zoom the map to that area. "
-                f"**{DEMO_PILOT_MUNICIPALITY}** is listed first in municipality view "
-                f"({DEMO_PILOT_BC_HYDRO_REGION} first in region view)."
-            )
+            table_columns = display_cols + [
+                c for c in ("data_provenance", "source") if c in ranked.columns
+            ]
             table_state = st.dataframe(
-                ranked[display_cols],
+                style_synthetic_rows(ranked, columns=table_columns),
                 column_config=_area_selection_column_config(),
                 width="stretch",
                 height=420,
@@ -684,7 +1057,8 @@ def _area_selection_tab() -> None:
                 selection_mode="single-row",
                 key=f"area_selection_table_{view}",
             )
-            st.caption(metrics_caption)
+            if "is_synthetic" in ranked.columns and bool(ranked["is_synthetic"].any()):
+                st.caption("🟡 Highlighted rows = demo/synthetic data.")
 
     selected_id: str | None = None
     selected_coords: tuple[float, float] | None = None
@@ -742,7 +1116,6 @@ def _area_selection_tab() -> None:
             bc_layer = bc_transmission_path_layer()
             if bc_layer is not None:
                 layers.append(bc_layer)
-        tooltip: dict[str, str] = {"text": "No data"}
         map_df = pd.DataFrame()
 
         if is_region_view:
@@ -751,15 +1124,12 @@ def _area_selection_tab() -> None:
                 st.info("Could not build region map (missing summary or centroids).")
             else:
                 layers.extend(_area_hotspot_map_layers(map_df, municipality=False))
-                tooltip = _area_region_map_tooltip()
         else:
             map_df = prepare_municipality_hotspot_map_df(limit=25)
             if map_df.empty:
                 st.info("No municipality rows with map coordinates.")
-                tooltip = {"text": "No data"}
             else:
                 layers.extend(_area_hotspot_map_layers(map_df, municipality=True))
-                tooltip = _area_municipality_map_tooltip()
 
         if show_municipalities and is_region_view:
             mun_map = prepare_municipality_hotspot_map_df(limit=15)
@@ -772,6 +1142,7 @@ def _area_selection_tab() -> None:
                         get_fill_color=[100, 100, 100, 180],
                         get_radius="outage_radius_m",
                         pickable=True,
+                        tooltip=_pydeck_tooltip(),
                     )
                 )
 
@@ -793,44 +1164,50 @@ def _area_selection_tab() -> None:
                 map_style=None,
                 initial_view_state=view_state,
                 layers=layers,
-                tooltip=tooltip,
             )
             st.pydeck_chart(deck, width="stretch")
 
     with st.expander("All BC regions"):
-        st.caption(
-            "Province-wide unofficial archive rankings (not filtered to the pilot region). "
-            "Map defaults above stay on the pilot area."
-        )
         if region_df.empty:
             st.info("No region summary loaded.")
         else:
+            region_sorted = promote_pilot_row(
+                region_df.sort_values("unique_outages", ascending=False),
+                municipality=False,
+            )
+            region_cols = select_display_columns(region_df, municipality=False) + [
+                c for c in ("data_provenance", "source") if c in region_sorted.columns
+            ]
             st.dataframe(
-                promote_pilot_row(
-                    region_df.sort_values("unique_outages", ascending=False),
-                    municipality=False,
-                )[select_display_columns(region_df, municipality=False)],
+                style_synthetic_rows(region_sorted, columns=region_cols),
                 column_config=_area_selection_column_config(),
                 width="stretch",
             )
+            if "is_synthetic" in region_sorted.columns and bool(region_sorted["is_synthetic"].any()):
+                st.caption("🟡 Highlighted rows = demo/synthetic data.")
         if mun_df.empty:
             st.info("No municipality summary loaded.")
         else:
+            mun_sorted = promote_pilot_row(
+                mun_df.sort_values("unique_outages", ascending=False),
+                municipality=True,
+            )
+            mun_cols = select_display_columns(mun_df, municipality=True) + [
+                c for c in ("data_provenance", "source") if c in mun_sorted.columns
+            ]
             st.dataframe(
-                promote_pilot_row(
-                    mun_df.sort_values("unique_outages", ascending=False),
-                    municipality=True,
-                )[select_display_columns(mun_df, municipality=True)],
+                style_synthetic_rows(mun_sorted, columns=mun_cols),
                 column_config=_area_selection_column_config(),
                 width="stretch",
             )
+            if "is_synthetic" in mun_sorted.columns and bool(mun_sorted["is_synthetic"].any()):
+                st.caption("🟡 Highlighted rows = demo/synthetic data.")
 
-    st.caption(
-        "Refresh bundled summaries from the outage-history extractor: copy "
-        "`data/processed/region_summary.csv` and `municipality_summary.csv` into "
-        "`data/processed/` or set `EXTRACTOR_OUTPUT_DIR` to the extractor `data/processed` path. "
-        "See README — **Refreshing area-selection data**."
-    )
+    with st.expander("Refresh area-selection data"):
+        st.caption(
+            "Copy extractor `region_summary.csv` / `municipality_summary.csv` into `data/processed/` "
+            "or set `EXTRACTOR_OUTPUT_DIR`. See README."
+        )
 
 
 tabs = st.tabs(
@@ -838,7 +1215,6 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
-    st.success(f"**{DEMO_PILOT_DISCLAIMER}** — demo defaults open on Surrey; BC-wide data stays available in other tabs and expanders.")
     st.markdown("### What this demo shows")
     st.markdown(
         """
@@ -866,23 +1242,41 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("Risk Dashboard")
-    st.caption(
-        "Summary uses live public feeds where available."
-        if LIVE_PUBLIC_ONLY
-        else "Summary may combine public feeds with local synthetic demo CSVs when feeds are unavailable."
-    )
-    weather_df = load_weather_cached(LIVE_PUBLIC_ONLY)
-    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY)
+    weather_result = _load_weather()
+    weather_df = weather_result.df
     outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
+    pilot_outages = _filter_outages_for_risk_map(outages_json_df)
+    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages)
+    json_prov = provenance_from_frame(
+        outages_json_df,
+        default_label="BC Hydro outage JSON",
+        default_source="not loaded",
+        live_public_only=LIVE_PUBLIC_ONLY,
+    )
+    weather_prov = DatasetProvenance(
+        label="Weather",
+        is_synthetic=weather_result.is_synthetic,
+        source=weather_result.data_source,
+        detail=weather_result.detail,
+    )
     st.markdown("#### Storm risk summary")
-    _summary_cards(risk_df, outages_json_df)
-
-    with st.expander("All BC demo corridors"):
-        st.caption(
-            f"Bundled synthetic corridors across BC ({len(load_all_demo_corridors())} rows). "
-            f"Risk dashboard defaults to **{DEMO_PILOT_MUNICIPALITY}** pilot corridor(s)."
+    obs_time = weather_result.observation_time or weather_result.last_updated
+    st.caption(
+        f"{provenance_badge(True)} Risk · {weather_prov.badge} Weather ({obs_time} UTC) · "
+        f"{json_prov.badge} Outages (map JSON, {DEMO_PILOT_MUNICIPALITY})"
+    )
+    if weather_result.freshness_warning:
+        st.warning(weather_result.freshness_warning)
+    if pilot_outages.empty and LIVE_PUBLIC_ONLY and outages_json_df.empty:
+        st.warning(
+            "No live outage rows (Live public only is on). Disable the sidebar toggle for demo fallback, "
+            "or refresh after fixing network/TLS."
         )
-        st.dataframe(load_all_demo_corridors(), width="stretch")
+    _summary_cards(risk_df, pilot_outages)
+    _render_live_outages_section(outages_json_df, json_provenance=json_prov)
+
+    with st.expander(f"All BC demo corridors — {provenance_badge(True)}"):
+        _show_dataframe_with_provenance(load_all_demo_corridors())
 
     st.markdown("#### Risk ranking")
     level_filter = st.multiselect(
@@ -891,37 +1285,49 @@ with tabs[1]:
         default=["High", "Medium", "Low"],
     )
     ranking = risk_df[risk_df["risk_level"].isin(level_filter)].sort_values("risk_score", ascending=False)
-    st.dataframe(
-        ranking[
-            [
-                "demo_corridor_id",
-                "region",
-                "municipality",
-                "risk_score",
-                "risk_level",
-                "top_risk_driver",
-                "suggested_review_action",
-            ]
+    _show_dataframe_with_provenance(
+        ranking,
+        columns=[
+            "demo_corridor_id",
+            "region",
+            "municipality",
+            "risk_score",
+            "risk_level",
+            "top_risk_driver",
+            "suggested_review_action",
+            "data_provenance",
+            "source",
         ],
-        width="stretch",
     )
 
     st.markdown("#### Top risk drivers")
     st.plotly_chart(make_top_drivers_chart(risk_df, dark=_chart_dark), width="stretch")
-    st.caption(
-        "Treatment recency is a placeholder only — a formal PoC would use BC Hydro vegetation patrol and treatment history."
-    )
-    with st.expander("Show regional weather input data"):
+    with st.expander(f"Show regional weather input data — {weather_prov.badge}"):
         if weather_df.empty:
             st.info("No weather rows loaded in the current mode.")
         else:
-            st.dataframe(weather_df, width="stretch")
+            pilot_weather = filter_weather_pilot_region(weather_df)
+            if weather_result.freshness_warning:
+                st.warning(weather_result.freshness_warning)
+            _show_weather_dataframe(pilot_weather)
+            if len(weather_df) > len(pilot_weather):
+                with st.expander(f"All loaded weather rows ({len(weather_df)})"):
+                    _show_weather_dataframe(weather_df)
 
 with tabs[2]:
-    weather_df = load_weather_cached(LIVE_PUBLIC_ONLY)
-    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY)
     outages_json_df = load_outages_json_cached(LIVE_PUBLIC_ONLY)
-    _risk_map_tab(risk_df, outages_json_df, weather_df)
+    pilot_outages = _filter_outages_for_risk_map(outages_json_df)
+    risk_df = _prepare_risk_data(LIVE_PUBLIC_ONLY, pilot_outages=pilot_outages)
+    _risk_map_tab(
+        risk_df,
+        outages_json_df,
+        json_provenance=provenance_from_frame(
+            outages_json_df,
+            default_label="BC Hydro outage JSON",
+            default_source="not loaded",
+            live_public_only=LIVE_PUBLIC_ONLY,
+        ),
+    )
 
 with tabs[3]:
     _area_selection_tab()
@@ -929,13 +1335,13 @@ with tabs[3]:
 with tabs[4]:
     st.subheader("Backtesting")
     st.warning("Synthetic demo backtesting only — not validated historical outage performance.")
-    st.caption("All metrics and charts on this tab use synthetic demo records for illustration.")
+    st.caption(f"{provenance_badge(True)} No public live backtesting feed — `demo_backtesting.csv` only.")
     backtesting_df = load_backtesting_data()
     metrics = compute_backtesting_metrics(backtesting_df)
     cols = st.columns(3)
     cols[0].metric("Demo outages captured in top-risk areas", f"{metrics['capture_rate_pct']}%")
     cols[1].metric("Demo model vs weather-only baseline (synthetic)", metrics["demo_vs_baseline_delta"])
-    cols[2].metric("Dataset", "Synthetic / demo")
+    cols[2].metric("Dataset", provenance_badge(True))
 
     fig = px.scatter(
         backtesting_df,
@@ -947,8 +1353,8 @@ with tabs[4]:
     )
     apply_plotly_chart_theme(fig, dark=_chart_dark)
     st.plotly_chart(fig, width="stretch")
-    with st.expander("Show synthetic backtesting input table"):
-        st.dataframe(backtesting_df, width="stretch")
+    with st.expander(f"Show backtesting input table — {provenance_badge(True)}"):
+        _show_dataframe_with_provenance(backtesting_df, alt_highlight=True)
 
 with tabs[5]:
     st.subheader("Data sources & assumptions")
@@ -956,7 +1362,7 @@ with tabs[5]:
         """
         **How to read this tab**
 
-        - **Real public data** — BC Hydro public outage JSON/RSS; Environment Canada / MSC endpoints referenced for weather context.
+        - **Real public data** — BC Hydro public outage map JSON (Risk Dashboard & Risk Map); Environment Canada / MSC endpoints referenced for weather context.
         - **Unofficial public snapshot data** — third-party public outage archives (not BC Hydro–validated; illustrative proxy only).
         - **Proxy data** — public transmission/corridor geometry and land-cover–style vegetation exposure scores used as stand-ins for internal asset and ROW data.
         - **Synthetic data** — local CSVs under `data/demo/` so the concept dashboard runs when live feeds are unavailable.
@@ -986,9 +1392,3 @@ with tabs[5]:
         """
     )
 
-    st.subheader("Live Source Checks (Optional)")
-    if st.button("Run lightweight source checks"):
-        rss_df = load_outages_rss_cached(LIVE_PUBLIC_ONLY)
-        unofficial_df = load_unofficial_snapshots_cached(LIVE_PUBLIC_ONLY)
-        st.write(f"RSS rows loaded: {len(rss_df)}")
-        st.write(f"Unofficial snapshot rows loaded: {len(unofficial_df)}")

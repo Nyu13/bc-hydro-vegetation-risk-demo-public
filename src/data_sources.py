@@ -30,8 +30,11 @@ DATA_SOURCES = [
         "type": "Optional HV line overlay — British Columbia (WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP)",
         "formal_poc_replacement": "BC Hydro feeder/circuit topology and protected corridor models",
         "notes": (
-            "Bundled WGS84 sample in data/demo/demo_bc_transmission_lines_sample.geojson. "
-            "Reference underlay only; demo_corridors.csv remains synthetic risk points."
+            "WFS pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP (openmaps.gov.bc.ca). "
+            "Loader prefers data/processed/bc_transmission_lines_lower_mainland.geojson, "
+            "else data/demo/demo_bc_transmission_lines_sample.geojson. "
+            "Refresh: python TMP/scripts/fetch_bc_transmission_layer.py. "
+            "Reference underlay only; demo_corridors.csv remains synthetic."
         ),
     },
     {

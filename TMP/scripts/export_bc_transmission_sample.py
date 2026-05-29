@@ -18,16 +18,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import urllib.parse
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import requests
 from shapely.geometry import box
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.outage_loader import _public_http_get  # noqa: E402
+
 LOCAL_KML = REPO_ROOT / "data" / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
 OUT_PATH = REPO_ROOT / "data" / "demo" / "demo_bc_transmission_lines_sample.geojson"
 MAX_BYTES = 500 * 1024
@@ -70,9 +75,8 @@ def _load_from_wfs(
         xmin, ymin, xmax, ymax = _wgs84_bbox_to_native(bbox_wgs84)
         params["bbox"] = f"{xmin},{ymin},{xmax},{ymax},urn:ogc:def:crs:EPSG::3005"
     url = f"{WFS_BASE}?{urllib.parse.urlencode(params)}"
-    resp = requests.get(url, timeout=180)
-    resp.raise_for_status()
-    payload = json.loads(resp.text)
+    content, _ssl_note = _public_http_get(url)
+    payload = json.loads(content.decode("utf-8"))
     gdf = gpd.GeoDataFrame.from_features(payload.get("features") or [], crs="EPSG:3005")
     if gdf.empty:
         raise RuntimeError("WFS returned no features (check bbox CRS or network).")

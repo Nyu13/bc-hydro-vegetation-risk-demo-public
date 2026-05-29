@@ -3,10 +3,15 @@ from __future__ import annotations
 import pandas as pd
 
 from src.config import DEMO_DATA_DIR
+from src.data_provenance import tag_dataframe
 
 
 def load_backtesting_data() -> pd.DataFrame:
-    return pd.read_csv(DEMO_DATA_DIR / "demo_backtesting.csv")
+    return tag_dataframe(
+        pd.read_csv(DEMO_DATA_DIR / "demo_backtesting.csv"),
+        is_synthetic=True,
+        source="demo_backtesting.csv (no public live source)",
+    )
 
 
 def compute_backtesting_metrics(df: pd.DataFrame) -> dict[str, float]:

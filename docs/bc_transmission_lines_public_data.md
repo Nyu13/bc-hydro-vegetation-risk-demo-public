@@ -121,11 +121,21 @@ Official how-to: [DataBC WMS/WFS getting started](https://bcgov.github.io/data-p
 - Default off; demo corridor markers remain **synthetic** (`demo_corridors.csv`).
 - Do not treat public HV lines as BC Hydro feeder topology or join them to outage polygons without validation.
 
-## Regenerating the bundled sample
+## Regenerating local overlay (PoC)
+
+**Full Lower Mainland layer (preferred at runtime — gitignored):**
+
+```powershell
+python TMP\scripts\fetch_bc_transmission_layer.py
+```
+
+Writes `data\processed\bc_transmission_lines_lower_mainland.geojson` (~900 features). `network_loader` uses this when present.
+
+**Bundled demo sample (Streamlit Cloud fallback):**
 
 ```powershell
 python TMP\scripts\export_bc_transmission_sample.py --lower-mainland
 python TMP\scripts\export_bc_transmission_sample.py --lower-mainland --max-features 200
 ```
 
-Commit `data/demo/demo_bc_transmission_lines_sample.geojson` only; keep full exports under `data/raw/` or `data/*.kml` (gitignored).
+Commit `data/demo/demo_bc_transmission_lines_sample.geojson` only; keep processed/raw exports gitignored.

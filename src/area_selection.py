@@ -81,9 +81,69 @@ def pilot_area_map_view_state(*, municipality: bool = True) -> pdk.ViewState:
     return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=zoom)
 
 
-def risk_map_pilot_view_state() -> pdk.ViewState:
-    """Risk map initial zoom — pilot municipality with regional context."""
-    return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=9.5)
+RISK_MAP_SINGLE_OUTAGE_ZOOM = 12.5
+RISK_MAP_DEFAULT_ZOOM = 9.5
+
+
+def jitter_duplicate_map_coordinates(
+    df: pd.DataFrame,
+    *,
+    lat_col: str = "lat",
+    lon_col: str = "lon",
+    jitter_m: float = 40.0,
+) -> pd.DataFrame:
+    """Spread stacked markers that share the same coordinates (display-only)."""
+    if df.empty or lat_col not in df.columns or lon_col not in df.columns:
+        return df
+    out = df.copy()
+    out[lat_col] = pd.to_numeric(out[lat_col], errors="coerce")
+    out[lon_col] = pd.to_numeric(out[lon_col], errors="coerce")
+    for (_, _), group in out.groupby([lat_col, lon_col], dropna=False):
+        if len(group) <= 1:
+            continue
+        center_lat = float(group.iloc[0][lat_col])
+        center_lon = float(group.iloc[0][lon_col])
+        cos_lat = max(0.15, abs(math.cos(math.radians(center_lat))))
+        lat_deg = jitter_m / 111_320.0
+        lon_deg = jitter_m / (111_320.0 * cos_lat)
+        indices = list(group.index)
+        for i, row_idx in enumerate(indices):
+            if i == 0:
+                continue
+            angle = (2.0 * math.pi * i) / len(indices)
+            out.at[row_idx, lat_col] = center_lat + lat_deg * math.sin(angle)
+            out.at[row_idx, lon_col] = center_lon + lon_deg * math.cos(angle)
+    return out
+
+
+def risk_map_pilot_view_state(
+    *,
+    lats: list[float] | None = None,
+    lons: list[float] | None = None,
+) -> pdk.ViewState:
+    """Risk map view — tight zoom for a single outage point, else pilot default or bbox fit."""
+    if not lats or not lons or len(lats) != len(lons):
+        return pdk.ViewState(latitude=DEMO_PILOT_LAT, longitude=DEMO_PILOT_LON, zoom=RISK_MAP_DEFAULT_ZOOM)
+    if len(lats) == 1:
+        return pdk.ViewState(
+            latitude=float(lats[0]),
+            longitude=float(lons[0]),
+            zoom=RISK_MAP_SINGLE_OUTAGE_ZOOM,
+        )
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    latitude = (lat_min + lat_max) / 2
+    longitude = (lon_min + lon_max) / 2
+    span = max(lat_max - lat_min, abs(lon_max - lon_min), 0.01)
+    if span < 0.015:
+        zoom = 12.0
+    elif span < 0.05:
+        zoom = 11.0
+    elif span < 0.15:
+        zoom = 10.0
+    else:
+        zoom = RISK_MAP_DEFAULT_ZOOM
+    return pdk.ViewState(latitude=latitude, longitude=longitude, zoom=zoom)
 
 
 def promote_pilot_row(ranked: pd.DataFrame, *, municipality: bool) -> pd.DataFrame:
@@ -180,6 +240,29 @@ def outage_intensity_color(unique_outages: float | int | None, max_outages: floa
     return [r, g, b, 210]
 
 
+def _area_region_tooltip_text(row: pd.Series) -> str:
+    lines = [
+        f"Region: {row.get('region_name', '')}",
+        f"Unique outages (proxy): {row.get('unique_outages', '')}",
+        f"Avg customers per outage (max): {row.get('avg_customers_per_unique_outage', '')}",
+        f"Population (approx): {row.get('population_2021', '')}",
+        f"Tree-related outages: {row.get('tree_related_outage_count', '')}",
+        f"Weather-related outages: {row.get('weather_related_outage_count', '')}",
+    ]
+    return "\n".join(line for line in lines if str(line.split(": ", 1)[-1]).strip())
+
+
+def _area_municipality_tooltip_text(row: pd.Series) -> str:
+    lines = [
+        f"Municipality: {row.get('municipality', '')}",
+        f"Region: {row.get('region_name', '')}",
+        f"Unique outages (proxy): {row.get('unique_outages', '')}",
+        f"Avg customers per outage (max): {row.get('avg_customers_per_unique_outage', '')}",
+        f"Population (2021): {row.get('population_2021', '')}",
+    ]
+    return "\n".join(line for line in lines if str(line.split(": ", 1)[-1]).strip())
+
+
 def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
     """Merge unofficial region outage summary with centroids and regional population."""
     from src.region_history_loader import load_region_outage_summary
@@ -204,6 +287,7 @@ def prepare_region_hotspot_map_df() -> tuple[pd.DataFrame, str]:
         merged["avg_customers_per_unique_outage"] = pd.to_numeric(
             merged["avg_customers_per_unique_outage"], errors="coerce"
         ).fillna(0).round(1)
+    merged["tooltip_text"] = merged.apply(_area_region_tooltip_text, axis=1)
     return merged, source
 
 
@@ -253,6 +337,7 @@ def prepare_municipality_hotspot_map_df(
         merged["avg_customers_per_unique_outage"] = pd.to_numeric(
             merged["avg_customers_per_unique_outage"], errors="coerce"
         ).fillna(0).round(1)
+    merged["tooltip_text"] = merged.apply(_area_municipality_tooltip_text, axis=1)
     return merged
 
 

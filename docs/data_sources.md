@@ -4,7 +4,7 @@
 
 **Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md) · [TMP/docs/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/BC_TRANSMISSION_DOWNLOAD.md) (full URLs, KML stub note)
 
-Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson`
+Preferred local export: `data/processed/bc_transmission_lines_lower_mainland.geojson` (gitignored) · Bundled fallback: `data/demo/demo_bc_transmission_lines_sample.geojson`
 
 ## Public Outage Sources
 
@@ -14,7 +14,7 @@ Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson`
 
 ## Unofficial Historical Proxy
 
-- Public snapshot archive (unofficial): [https://github.com/outages/bchydro-outages](https://github.com/outages/bchydro-outages)
+- Public snapshot archive (unofficial): [https://github.com/outages/bchydro-outages](https://github.com/outages/bchydro-outages) — same JSON object schema as `outages-map-data.json`, but updated on a slower schedule; prefer the live BC Hydro URL for current outages and map polygons.
 
 ## Network / Corridor Proxy (BC demo)
 
@@ -35,12 +35,14 @@ Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson`
 | KML loader (stub) | [openmaps loader.kml](https://openmaps.gov.bc.ca/kml/geo/layers/WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml) — NetworkLink only; use WFS for geometry |
 | ArcGIS layer | [whse/bcgw_pub_whse_basemapping MapServer /77](https://delivery.maps.gov.bc.ca/arcgis/rest/services/whse/bcgw_pub_whse_basemapping/MapServer/77) |
 | Licence | Open Government Licence – British Columbia |
-| Bundled sample | `data/demo/demo_bc_transmission_lines_sample.geojson` (~140 KB, 120 lines, Lower Mainland bbox) |
-| Local full copy (gitignored) | `data/raw/bc_transmission_lines_full.geojson`, `data/*.kml` loader stub |
+| Local PoC export (preferred) | `data/processed/bc_transmission_lines_lower_mainland.geojson` (~900 lines, Lower Mainland WFS bbox) |
+| Bundled sample (fallback) | `data/demo/demo_bc_transmission_lines_sample.geojson` (~70–120 lines) |
+| Province / manual (gitignored) | `data/raw/bc_transmission_lines_full.geojson`, `data/*.kml` loader stub |
 
 Regenerate sample:
 
 ```bash
+python TMP/scripts/fetch_bc_transmission_layer.py
 python TMP/scripts/export_bc_transmission_sample.py --lower-mainland
 ```
 

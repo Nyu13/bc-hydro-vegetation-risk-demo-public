@@ -51,15 +51,58 @@ streamlit run app.py
 
 In offline mode, loaders read local fallback files from `data/demo/`.
 
+### BC Hydro live outages (TLS on corporate Python)
+
+Browsers often reach [bchydro.com](https://www.bchydro.com) while **Python 3.14+ on Windows** fails with `CERTIFICATE_VERIFY_FAILED` / *Missing Authority Key Identifier* on the same host.
+
+**Windows (recommended startup):** if `BC_HYDRO_SSL_VERIFY` is unset, the app uses `verify=False` on the first request (no failed verify attempt, no TLS retry log). To force certificate verification on Windows, set `BC_HYDRO_SSL_VERIFY=1` before starting Streamlit.
+
+**Windows (PowerShell, current session)** — explicit disable (same as default on Windows):
+
+```powershell
+$env:BC_HYDRO_SSL_VERIFY='0'
+streamlit run app.py
+```
+
+**Windows (cmd):**
+
+```cmd
+set BC_HYDRO_SSL_VERIFY=0
+streamlit run app.py
+```
+
+**Linux/macOS:** verification is **on** when unset. To disable:
+
+```bash
+export BC_HYDRO_SSL_VERIFY=0
+streamlit run app.py
+```
+
+After changing env vars, **restart** Streamlit (env is read at process start) and use sidebar **Refresh live data**. On non-Windows platforms, if verify is enabled and TLS fails, loaders retry once without verification (one warning per process).
+
+**Expected live counts (May 2026 example):** ~40 JSON outages province-wide; RSS ~60 items (~40 active). **Surrey** pilot slice: **3** current outages, **54** customers in public JSON/RSS (BC Hydro website totals can differ by aggregation).
+
 ### Live Public Only Mode (No Synthetic Fallback For Selected Sources)
 In the app UI, enable:
-- `Live public only (no synthetic fallback for outage JSON/RSS, unofficial snapshots, weather)`
+- `Live public only (no synthetic fallback for outage JSON/RSS, weather)`
 
 When enabled, those sources return empty data on fetch failure instead of using synthetic fallback files.
 
+**Risk Map defaults:** **BC Hydro live (JSON)** for outage polygons; corridor risk markers and weather rings off; outage geometry **Both** with outline-only polygons; 2px outage points (corridor markers are purple-tinted when enabled).
+
+### Live vs historical data in the UI
+
+| View | What it shows | Sources |
+| --- | --- | --- |
+| **Risk Dashboard** | **Current** outages and **recent** weather (last 48h) | BC Hydro `outages-map-data.json`, outage RSS, MSC GeoMet `swob-realtime` + `climate-hourly` |
+| **Risk Map** | **Current** Surrey outages (map geometry) + corridor context | BC Hydro `outages-map-data.json` only (Surrey-filtered) |
+| **Area selection** | **Historical** unique-outage rankings (archive proxy through **2026-05-19**) | Bundled `demo_*_outage_summary.csv` or extractor `data/processed/` |
+
+Use sidebar **Refresh live data** to refetch JSON, RSS, and weather. Area-selection archive CSVs are not refreshed by that button.
+
 ### Refreshing live public feeds in a running session
 
-Public outage JSON/RSS, unofficial snapshots, and the weather loader are cached for the Streamlit session (`@st.cache_data` with no TTL). Use the sidebar **Refresh live data** button to clear that cache and refetch without restarting the app. Bundled demo corridors, risk scores, backtesting, and area-selection archive tables are not refreshed by that button — update those via `EXTRACTOR_OUTPUT_DIR` or `TMP/scripts/refresh_area_selection_data.py` (see below).
+Public outage JSON/RSS and the weather loader are cached for the Streamlit session (`@st.cache_data` with no TTL). Use the sidebar **Refresh live data** button to clear that cache and refetch without restarting the app. Bundled demo corridors, risk scores, backtesting, and area-selection archive tables are not refreshed by that button — update those via `EXTRACTOR_OUTPUT_DIR` or `TMP/scripts/refresh_area_selection_data.py` (see below).
 
 ## Project Structure
 
@@ -90,11 +133,25 @@ Public outage JSON/RSS, unofficial snapshots, and the weather loader are cached 
 
 ## Data Provenance (Real vs Synthetic)
 
-- **Real public (preferred):** BC Hydro outage JSON/RSS, ECCC/MSC weather endpoints.
-- **Public proxy:** unofficial outage snapshots, public transmission/land-cover proxy concepts.
-- **Synthetic demo files:** `data/demo/demo_corridors.csv`, `data/demo/demo_weather.csv`, `data/demo/demo_outages.csv`, `data/demo/demo_risk_scores.csv`, `data/demo/demo_backtesting.csv`.
-- **Bundled public context:** `data/demo/demo_municipality_population.csv` (Statistics Canada 2021 Census subset), `data/demo/demo_region_outage_summary.csv` (unofficial snapshot region ranking), `data/demo/demo_municipality_outage_summary.csv` (top municipality hotspots), `data/demo/demo_region_map_context.csv` (region centroids + approximate regional population for map context).
-- If real public fetch fails (or offline mode is enabled), the app uses synthetic fallback files to remain runnable.
+The app tags rows with `is_synthetic`, `data_provenance`, and `source`, and highlights synthetic rows in tables (amber `#fff3cd` or pink `#ffe0e0`). Map markers use **orange** for live public outages, **gray** for synthetic outage fallback, and **purple-tinted** disks for demo corridor risk (always synthetic).
+
+| Dataset | Default (online) | `DEMO_OFFLINE_MODE=1` | Live public only ON + fetch fails | No public live source |
+| --- | --- | --- | --- | --- |
+| BC Hydro outage JSON | Live fetch → 🟢 | `demo_outages.csv` → 🟡 | Empty + warning → no hidden fallback | — |
+| BC Hydro outage RSS | Live fetch → 🟢 | `demo_outages.csv` → 🟡 | Empty | — |
+| Weather (ECCC / MSC GeoMet) | Live `swob-realtime` + `climate-hourly` (pilot bbox, 48h) → 🟢 | `demo_weather.csv` → 🟡 | Empty | — |
+| Demo corridors / risk scores | Always `demo_*.csv` → 🟡 | Same | Same (labeled, not disguised as live) | Yes |
+| Backtesting | Always `demo_backtesting.csv` → 🟡 | Same | Same | Yes |
+| Area selection summaries | Bundled `demo_*` or extractor `data/processed/` | Bundled demo → 🟡 | N/A (local files) | Demo CSV if no extractor output |
+| BC transmission overlay | Bundled public GeoJSON sample | Same | Same | Reference geometry only |
+
+**Modes**
+
+- **Online default:** try live for each fetchable source; synthetic CSV only on network/API failure.
+- **Offline:** `set DEMO_OFFLINE_MODE=1` — all fetchable sources read `data/demo/` synthetic CSVs.
+- **Live public only:** sidebar toggle — failed fetches return empty data and a message instead of synthetic fallback (outage JSON/RSS, unofficial snapshots, weather).
+
+Implementation: `src/data_provenance.py`, loaders (`outage_loader`, `weather_loader`, `network_loader`, `backtesting`, `region_history_loader`), and `app.py` UI badges (🟢 Live / 🟡 Demo/synthetic).
 
 ### Refreshing area-selection data (from outage-history extractor)
 

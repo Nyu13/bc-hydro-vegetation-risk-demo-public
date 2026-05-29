@@ -48,6 +48,39 @@ def calculate_weather_severity(
     return round(float(np.clip(score, 0, 100)), 2)
 
 
+# PoC composite (0–100): 40% live weather severity + 30% corridor exposure proxy
+# (demo_corridors forest/historical scores) + 20% Surrey live outage density (map JSON,
+# same pilot filter as Risk Map) + 10% terrain/access from demo corridors.
+POC_OUTAGE_COUNT_CAP = 20
+POC_OUTAGE_CUSTOMERS_CAP = 75_000
+
+
+def calculate_live_outage_density_score(
+    outage_count: int,
+    customers_affected: int,
+    *,
+    count_cap: int = POC_OUTAGE_COUNT_CAP,
+    customers_cap: int = POC_OUTAGE_CUSTOMERS_CAP,
+) -> float:
+    """Normalize Surrey pilot outage count and customers to 0–100."""
+    count_component = normalize_score(float(outage_count), 0, float(count_cap))
+    customers_component = normalize_score(float(customers_affected), 0, float(customers_cap))
+    score = 0.6 * count_component + 0.4 * customers_component
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def calculate_corridor_exposure_score(
+    forest_exposure_score: float,
+    historical_outage_proxy_score: float,
+    overhead_length_km: float = 0.0,
+) -> float:
+    """Illustrative corridor / transmission-row exposure from bundled demo attributes."""
+    length_component = normalize_score(overhead_length_km, 0, 40)
+    base = 0.55 * forest_exposure_score + 0.45 * historical_outage_proxy_score
+    score = 0.85 * base + 0.15 * length_component
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
 def calculate_demo_risk_score(
     weather_severity_score: float,
     vegetation_exposure_score: float,
@@ -72,10 +105,15 @@ def assign_risk_level(risk_score: float) -> str:
 
 
 def identify_top_risk_driver(row: pd.Series) -> str:
+    outage_label = (
+        "Live Surrey outage density"
+        if row.get("live_outage_density_applied")
+        else "Public outage history proxy"
+    )
     driver_map = {
         "weather_severity_score": "Wind gust / weather severity",
-        "vegetation_exposure_score": "Vegetation exposure",
-        "public_outage_history_score": "Public outage history proxy",
+        "vegetation_exposure_score": "Corridor exposure (demo proxy)",
+        "public_outage_history_score": outage_label,
         "terrain_access_score": "Terrain/access constraints",
     }
     top_key = max(driver_map.keys(), key=lambda key: float(row.get(key, 0)))
@@ -84,8 +122,8 @@ def identify_top_risk_driver(row: pd.Series) -> str:
 
 def suggest_review_action(risk_level: str, top_driver: str) -> str:
     if risk_level == "High":
-        if "Vegetation" in top_driver:
-            return "Review vegetation exposure before storm window"
+        if "Corridor" in top_driver or "Vegetation" in top_driver:
+            return "Review corridor exposure before storm window"
         if "weather" in top_driver.lower() or "wind" in top_driver.lower():
             return "Consider crew/material pre-staging"
         return "Prioritize patrol if forecast severity increases"

@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import DEMO_DATA_DIR, PROCESSED_DATA_DIR
+from src.data_provenance import tag_dataframe
 
 LOGGER = logging.getLogger(__name__)
 
@@ -193,8 +194,15 @@ def load_region_outage_summary() -> tuple[pd.DataFrame, str]:
             drop_cols = [c for c in _SNAPSHOT_CUSTOMER_COLS if c in df.columns]
             if drop_cols:
                 df = df.drop(columns=drop_cols)
-            label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
-            return df, f"{path.name} ({label})"
+            bundled_demo = path.name.startswith("demo_")
+            label = _source_label(path, bundled_demo=bundled_demo)
+            source_label = f"{path.name} ({label})"
+            df = tag_dataframe(
+                df,
+                is_synthetic=bundled_demo,
+                source=source_label,
+            )
+            return df, source_label
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Could not read region summary at %s: %s", path, exc)
     return pd.DataFrame(), "not loaded"
@@ -215,8 +223,15 @@ def load_municipality_outage_summary() -> tuple[pd.DataFrame, str]:
             drop_cols = [c for c in _SNAPSHOT_CUSTOMER_COLS if c in df.columns]
             if drop_cols:
                 df = df.drop(columns=drop_cols)
-            label = _source_label(path, bundled_demo=path.name.startswith("demo_"))
-            return df, f"{path.name} ({label})"
+            bundled_demo = path.name.startswith("demo_")
+            label = _source_label(path, bundled_demo=bundled_demo)
+            source_label = f"{path.name} ({label})"
+            df = tag_dataframe(
+                df,
+                is_synthetic=bundled_demo,
+                source=source_label,
+            )
+            return df, source_label
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Could not read municipality summary at %s: %s", path, exc)
     return pd.DataFrame(), "not loaded"

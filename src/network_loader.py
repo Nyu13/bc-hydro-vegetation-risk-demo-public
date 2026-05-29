@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 import pandas as pd
 
 from src.config import (
     BC_TRANSMISSION_GEOJSON,
     BC_TRANSMISSION_KML,
+    BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
     DEMO_DATA_DIR,
     DEMO_PILOT_MUNICIPALITY,
     DEMO_PILOT_TRANSMISSION_BBOX,
 )
+from src.data_provenance import tag_dataframe
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +25,11 @@ BC_TRANSMISSION_UI_LABEL = (
 
 def _read_demo_corridors_csv() -> pd.DataFrame:
     try:
-        return pd.read_csv(DEMO_DATA_DIR / "demo_corridors.csv")
+        return tag_dataframe(
+            pd.read_csv(DEMO_DATA_DIR / "demo_corridors.csv"),
+            is_synthetic=True,
+            source="demo_corridors.csv (no public live corridor feed)",
+        )
     except Exception as exc:
         LOGGER.error("Failed to load demo corridor data: %s", exc)
         return pd.DataFrame()
@@ -42,6 +49,27 @@ def load_transmission_lines(*, pilot_scope: bool = True) -> pd.DataFrame:
 def load_all_demo_corridors() -> pd.DataFrame:
     """Full bundled demo_corridors.csv (all BC regions in the demo file)."""
     return _read_demo_corridors_csv()
+
+
+def resolve_bc_transmission_geojson() -> Path | None:
+    """
+    Prefer local WFS export (data/processed/) when present; else bundled demo sample.
+    """
+    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
+        return BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON
+    if BC_TRANSMISSION_GEOJSON.exists():
+        return BC_TRANSMISSION_GEOJSON
+    return None
+
+
+def bc_transmission_geojson_source() -> str:
+    """Short label for UI / logging: which GeoJSON file backs the overlay."""
+    path = resolve_bc_transmission_geojson()
+    if path is None:
+        return "unavailable"
+    if path == BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON:
+        return "processed Lower Mainland WFS export"
+    return "bundled demo sample"
 
 
 def _coords_to_path(coords: list) -> list[list[float]]:
@@ -82,31 +110,41 @@ def load_bc_transmission_paths(
     *,
     bbox: tuple[float, float, float, float] | None = None,
 ) -> pd.DataFrame:
-    geojson_path = BC_TRANSMISSION_GEOJSON
-    if not geojson_path.exists():
-        LOGGER.warning("BC transmission sample missing: %s", geojson_path)
+    geojson_path = resolve_bc_transmission_geojson()
+    if geojson_path is None:
+        LOGGER.warning(
+            "BC transmission GeoJSON missing (expected %s or %s)",
+            BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
+            BC_TRANSMISSION_GEOJSON,
+        )
         return pd.DataFrame()
     try:
         with geojson_path.open(encoding="utf-8") as fh:
             payload = json.load(fh)
     except Exception as exc:
-        LOGGER.error("Failed to read BC transmission GeoJSON: %s", exc)
+        LOGGER.error("Failed to read BC transmission GeoJSON %s: %s", geojson_path, exc)
         return pd.DataFrame()
     rows: list[dict] = []
+    default_note = (
+        "BC Geographic Warehouse transmission lines — reference overlay (not feeder GIS)."
+    )
     for feature in payload.get("features", []):
         props = feature.get("properties") or {}
         geom = feature.get("geometry") or {}
         line_id = props.get("line_id", props.get("TRANSMISSION_LINE_ID"))
-        note = props.get(
-            "dataset_note",
-            "BC Geographic Warehouse transmission lines — reference overlay (not feeder GIS).",
-        )
+        note = props.get("dataset_note", default_note)
         for path in _geometry_to_paths(geom):
             if bbox is not None and not _path_intersects_bbox(path, bbox):
                 continue
             rows.append({"path": path, "line_id": line_id, "dataset_note": note})
     if not rows:
         return pd.DataFrame()
+    LOGGER.debug(
+        "Loaded %s transmission path segment(s) from %s (%s)",
+        len(rows),
+        geojson_path.name,
+        bc_transmission_geojson_source(),
+    )
     return pd.DataFrame(rows)
 
 

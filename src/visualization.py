@@ -38,11 +38,14 @@ def make_top_drivers_chart(risk_df: pd.DataFrame, *, dark: bool = False):
         "public_outage_history_score",
         "terrain_access_score",
     ]
+    live_outage = bool(risk_df["live_outage_density_applied"].any()) if "live_outage_density_applied" in risk_df.columns else False
     means = risk_df[driver_cols].mean().rename(
         {
             "weather_severity_score": "Wind gust / weather severity",
-            "vegetation_exposure_score": "Vegetation exposure",
-            "public_outage_history_score": "Historical outage frequency proxy",
+            "vegetation_exposure_score": "Corridor exposure (demo proxy)",
+            "public_outage_history_score": (
+                "Live Surrey outage density" if live_outage else "Historical outage frequency proxy"
+            ),
             "terrain_access_score": "Terrain/access constraints",
         }
     )

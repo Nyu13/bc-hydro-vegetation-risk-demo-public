@@ -61,8 +61,17 @@ _LIGHT = """
   [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
     color: #198754 !important;
   }
-  div[data-testid="stMetricValue"] { color: #198754 !important; }
-  div[data-testid="stMetricLabel"] { color: #495057 !important; }
+  div[data-testid="stMetricValue"] {
+    color: #198754 !important;
+    font-size: 1.35rem !important;
+    line-height: 1.2 !important;
+    overflow-wrap: anywhere;
+  }
+  div[data-testid="stMetricLabel"] {
+    color: #495057 !important;
+    font-size: 0.8rem !important;
+    line-height: 1.25 !important;
+  }
   /* Dataframes/tables */
   [data-testid="stDataFrame"] {
     background: #ffffff !important;
@@ -131,8 +140,17 @@ _DARK = """
   [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
     color: #7fdbca !important;
   }
-  div[data-testid="stMetricValue"] { color: #7fdbca !important; }
-  div[data-testid="stMetricLabel"] { color: #a0a8b0 !important; }
+  div[data-testid="stMetricValue"] {
+    color: #7fdbca !important;
+    font-size: 1.35rem !important;
+    line-height: 1.2 !important;
+    overflow-wrap: anywhere;
+  }
+  div[data-testid="stMetricLabel"] {
+    color: #a0a8b0 !important;
+    font-size: 0.8rem !important;
+    line-height: 1.25 !important;
+  }
   /* Dataframes/tables */
   [data-testid="stDataFrame"] {
     background: #1f2430 !important;
