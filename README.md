@@ -141,6 +141,7 @@ The app tags rows with `is_synthetic`, `data_provenance`, and `source`, and high
 | BC Hydro outage RSS | Live fetch → 🟢 | `demo_outages.csv` → 🟡 | Empty | — |
 | Weather (ECCC / MSC GeoMet) | Live `swob-realtime` + `climate-hourly` (pilot bbox, 48h) → 🟢 | `demo_weather.csv` → 🟡 | Empty | — |
 | Demo corridors / risk scores | Always `demo_*.csv` → 🟡 | Same | Same (labeled, not disguised as live) | Yes |
+| Surrey open/free summary | `data/processed/surrey_free_data_corridor_summary.csv` → 🟦 when built | Placeholder CSV → stub | N/A (local file) | demo_corridors.csv |
 | Backtesting | Always `demo_backtesting.csv` → 🟡 | Same | Same | Yes |
 | Area selection summaries | Bundled `demo_*` or extractor `data/processed/` | Bundled demo → 🟡 | N/A (local files) | Demo CSV if no extractor output |
 | BC transmission overlay | Bundled public GeoJSON sample | Same | Same | Reference geometry only |
@@ -151,7 +152,17 @@ The app tags rows with `is_synthetic`, `data_provenance`, and `source`, and high
 - **Offline:** `set DEMO_OFFLINE_MODE=1` — all fetchable sources read `data/demo/` synthetic CSVs.
 - **Live public only:** sidebar toggle — failed fetches return empty data and a message instead of synthetic fallback (outage JSON/RSS, unofficial snapshots, weather).
 
-Implementation: `src/data_provenance.py`, loaders (`outage_loader`, `weather_loader`, `network_loader`, `backtesting`, `region_history_loader`), and `app.py` UI badges (🟢 Live / 🟡 Demo/synthetic).
+Implementation: `src/data_provenance.py`, loaders (`outage_loader`, `weather_loader`, `network_loader`, `backtesting`, `region_history_loader`, `free_data_loader`), and `app.py` UI badges (🟢 Live public / 🟡 Demo/synthetic / 🟦 Open/free processed / 🔴 Unavailable).
+
+### Surrey open/free data pipeline
+
+Build processed vegetation proxies for **Public/proxy only** mode (Planet sample takes priority when enabled):
+
+```powershell
+python TMP/scripts/run_surrey_free_data_pipeline.py --static-only
+```
+
+See [docs/free_data_pipeline_runbook.md](docs/free_data_pipeline_runbook.md). Output: `data/processed/surrey_free_data_corridor_summary.csv`.
 
 ### Refreshing area-selection data (from outage-history extractor)
 

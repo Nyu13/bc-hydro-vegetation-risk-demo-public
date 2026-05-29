@@ -91,7 +91,9 @@ PLANET_SURREY_SAMPLE_CSV = DEMO_DATA_DIR / "planet_surrey_sample_placeholder.csv
 # Optional processed open/free data outputs (see docs/free_data_integration_plan.md)
 SURREY_WORLDCOVER_STATS_CSV = PROCESSED_DATA_DIR / "surrey_worldcover_corridor_stats.csv"
 SURREY_FREE_DATA_SUMMARY_CSV = PROCESSED_DATA_DIR / "surrey_free_data_corridor_summary.csv"
+SURREY_FREE_DATA_PLACEHOLDER_CSV = DEMO_DATA_DIR / "surrey_free_data_corridor_summary_placeholder.csv"
 SURREY_SENTINEL2_STATS_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_corridor_stats.csv"
+SURREY_SENTINEL2_SCENE_QA_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_scene_qa.csv"
 
 PLANET_POC_DISCLAIMER = (
     "Planet layers are proposed remote-sensing inputs for the Surrey proof-of-process. "

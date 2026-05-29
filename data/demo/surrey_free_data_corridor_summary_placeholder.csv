@@ -1,0 +1,2 @@
+aoi_id,worldcover_tree_pct,worldcover_shrub_grass_pct,worldcover_built_pct,worldcover_bare_pct,nalcms_forest_pct,sentinel2_ndvi_mean,sentinel2_ndmi_mean,vegetation_change_score,modis_lst_day_mean_c,era5_soil_moisture_anomaly,vri_mean_crown_closure,vri_mean_height_m,lidar_canopy_height_mean_m,terrain_slope_mean_deg,vegetation_exposure_score,canopy_exposure_score,vegetation_dryness_score,heat_drought_stress_score,terrain_access_score,data_source,data_status,as_of_date
+surrey_buffer_200m,,,,,,,,,,,,,,,50.0,50.0,50.0,50.0,50.0,open_free_v1,stub_not_built,2026-05-29

@@ -46,12 +46,53 @@ DATA_SOURCES = [
         "notes": "Used as weather severity proxy for storm windows.",
     },
     {
+        "name": "Sentinel-2 L2A (Surrey corridor — local .SAFE / .zip)",
+        "url": "https://browser.dataspace.copernicus.eu/",
+        "classification": "Open/free processed",
+        "type": "NDVI / NDMI from local L2A .SAFE folders or .zip products",
+        "formal_poc_replacement": "Planet ARPS / Area Monitoring greenness and moisture time series",
+        "notes": (
+            "Process offline: TMP/scripts/build_surrey_sentinel2_indices.py --safe-dir "
+            '"data/raw/surrey/Sentinel-2 L2A" (recursive scan of .SAFE and MSIL2A .zip). '
+            "Legacy band GeoTIFF mode: --red/--nir/--swir. "
+            "Raw products in data/raw/surrey/ (gitignored). "
+            "See docs/sentinel2_manual_download_notes.md. No Streamlit runtime download."
+        ),
+    },
+    {
+        "name": "ESA WorldCover / Canada Land Cover (Surrey corridor)",
+        "url": "https://esa-worldcover.org/en/data-access",
+        "classification": "Open/free processed",
+        "type": "Vegetation / land-cover proxy — zonal stats in 200 m buffer",
+        "formal_poc_replacement": "BC Hydro vegetation patrol, treatment, ROW, and LiDAR-informed exposure datasets",
+        "notes": (
+            "Pipeline: TMP/scripts/run_surrey_free_data_pipeline.py → "
+            "data/processed/surrey_free_data_corridor_summary.csv (🟦). "
+            "Used in Public/proxy mode when Planet sample is off."
+        ),
+    },
+    {
         "name": "ESA WorldCover / Canada Land Cover",
         "url": "https://esa-worldcover.org/en",
         "classification": "Public proxy",
         "type": "Vegetation / land-cover proxy",
         "formal_poc_replacement": "BC Hydro vegetation patrol, treatment, ROW, and LiDAR-informed exposure datasets",
         "notes": "Proxy for tree/forest exposure near demo corridors.",
+    },
+    {
+        "name": "Planet (commercial — Surrey PoC request)",
+        "url": "https://www.planet.com/",
+        "classification": "Commercial (not purchased)",
+        "type": "FCM canopy, SWC 100 m, LST 100 m, ARPS/PlanetScope vegetation analytics",
+        "formal_poc_replacement": (
+            "BC Hydro LiDAR-informed canopy, patrol/treatment records, and operational vegetation exposure"
+        ),
+        "notes": (
+            "Not loaded until purchased; demo uses data/demo/planet_surrey_sample_placeholder.csv when "
+            "sidebar mode is Planet sample enabled. Preferred AOI: Surrey transmission 200 m buffer "
+            "(~3,580 ha). Full product list, AOI comparison, and quote questions: Data Sources & "
+            "Assumptions tab → Planet section. See docs/planet_surrey_data_request.md."
+        ),
     },
 ]
 

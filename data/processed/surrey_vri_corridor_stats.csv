@@ -1,0 +1,2 @@
+aoi_id,layer,data_status,data_source,as_of_date,instructions,vri_mean_crown_closure,vri_mean_height_m
+SURREY-TX-BUF-200M,bc_vri_r1,stub_no_intersection,open_free_v1,2026-05-29,VRI polygons in bbox but none intersect corridor buffer.,,

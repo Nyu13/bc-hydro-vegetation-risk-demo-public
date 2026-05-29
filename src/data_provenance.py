@@ -17,6 +17,7 @@ MAP_CORRIDOR_SYNTHETIC_RGBA = [128, 90, 180, 220]
 
 PROVENANCE_LIVE = "live"
 PROVENANCE_SYNTHETIC = "synthetic"
+PROVENANCE_OPEN_FREE = "open_free_processed"
 
 WEATHER_DISPLAY_METRIC_COLUMNS = (
     "wind_gust_kmh",
@@ -38,7 +39,12 @@ class DatasetProvenance:
     @property
     def badge(self) -> str:
         unavailable = not self.is_synthetic and "No rows loaded" in self.detail and "Live public only" in self.detail
-        return provenance_badge(self.is_synthetic, unavailable=unavailable)
+        open_free = getattr(self, "is_open_free", False)
+        return provenance_badge(
+            self.is_synthetic,
+            unavailable=unavailable,
+            open_free=open_free,
+        )
 
     @property
     def caption(self) -> str:
@@ -50,10 +56,17 @@ class DatasetProvenance:
         return base
 
 
-def provenance_badge(is_synthetic: bool, *, unavailable: bool = False) -> str:
+def provenance_badge(
+    is_synthetic: bool,
+    *,
+    unavailable: bool = False,
+    open_free: bool = False,
+) -> str:
     if unavailable:
         return "🔴 Unavailable"
-    return "🟡 Demo/synthetic" if is_synthetic else "🟢 Live"
+    if open_free:
+        return "🟦 Open/free processed"
+    return "🟡 Demo/synthetic" if is_synthetic else "🟢 Live public"
 
 
 def fallback_reason_from_source(source: str) -> str:

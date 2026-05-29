@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import DEMO_DATA_MODES, PLANET_SURREY_SAMPLE_CSV
+from src.config import DEMO_DATA_MODES, PLANET_SURREY_SAMPLE_CSV, SURREY_FREE_DATA_SUMMARY_CSV
+from src.free_data_loader import free_data_usable, load_surrey_free_data_summary
 from src.risk_scoring import (
     compute_canopy_exposure_score,
     compute_heat_drought_stress_score,
@@ -63,9 +64,15 @@ def load_planet_surrey_sample(data_mode: str, csv_path: Path | None = None) -> P
     """Load Surrey Planet sample CSV when Planet mode is enabled; otherwise not loaded."""
     path = csv_path or PLANET_SURREY_SAMPLE_CSV
     if not planet_sample_enabled(data_mode):
+        free_hint = ""
+        if SURREY_FREE_DATA_SUMMARY_CSV.is_file() or free_data_usable(load_surrey_free_data_summary()):
+            free_hint = " Open/free summary CSV available for Public/proxy mode."
         return PlanetLoadResult(
             status="not loaded",
-            detail="Planet sample disabled — select “Planet sample enabled” in the sidebar.",
+            detail=(
+                "Planet sample disabled — select “Planet sample enabled” in the sidebar."
+                + free_hint
+            ),
             row=None,
             df=pd.DataFrame(columns=list(PLANET_CSV_COLUMNS)),
         )

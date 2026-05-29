@@ -144,6 +144,87 @@ def compute_heat_drought_stress_score(
     return round(float(np.clip(score, 0, 100)), 2)
 
 
+def _weighted_mean(components: list[tuple[float, float]], *, default: float = 50.0) -> float:
+    """Weighted average of (value, weight) pairs; default when empty."""
+    if not components:
+        return default
+    total_w = sum(w for _, w in components)
+    if total_w <= 0:
+        return default
+    score = sum(v * w for v, w in components) / total_w
+    return round(float(np.clip(score, 0, 100)), 2)
+
+
+def compute_free_data_vegetation_exposure_score(
+    *,
+    worldcover_tree_pct: float | None = None,
+    nalcms_forest_pct: float | None = None,
+    vri_mean_crown_closure: float | None = None,
+) -> float:
+    """Open/free land-cover blend for corridor vegetation exposure."""
+    parts: list[tuple[float, float]] = []
+    if worldcover_tree_pct is not None and not pd.isna(worldcover_tree_pct):
+        parts.append((normalize_score(float(worldcover_tree_pct), 0, 80), 0.50))
+    if nalcms_forest_pct is not None and not pd.isna(nalcms_forest_pct):
+        parts.append((normalize_score(float(nalcms_forest_pct), 0, 80), 0.25))
+    if vri_mean_crown_closure is not None and not pd.isna(vri_mean_crown_closure):
+        parts.append((normalize_score(float(vri_mean_crown_closure), 0, 100), 0.25))
+    return _weighted_mean(parts)
+
+
+def compute_free_data_canopy_exposure_score(
+    *,
+    worldcover_tree_pct: float | None = None,
+    vri_mean_height_m: float | None = None,
+    lidar_canopy_height_mean_m: float | None = None,
+) -> float:
+    parts: list[tuple[float, float]] = []
+    if worldcover_tree_pct is not None and not pd.isna(worldcover_tree_pct):
+        parts.append((normalize_score(float(worldcover_tree_pct), 0, 80), 0.35))
+    if vri_mean_height_m is not None and not pd.isna(vri_mean_height_m):
+        parts.append((normalize_score(float(vri_mean_height_m), 0, 35), 0.35))
+    if lidar_canopy_height_mean_m is not None and not pd.isna(lidar_canopy_height_mean_m):
+        parts.append((normalize_score(float(lidar_canopy_height_mean_m), 0, 35), 0.30))
+    return _weighted_mean(parts)
+
+
+def compute_free_data_vegetation_dryness_score(
+    *,
+    sentinel2_ndmi_mean: float | None = None,
+    era5_soil_moisture_anomaly: float | None = None,
+) -> float:
+    if sentinel2_ndmi_mean is not None and not pd.isna(sentinel2_ndmi_mean):
+        ndmi = float(sentinel2_ndmi_mean)
+        return round(float(np.clip((0.4 - ndmi) / 0.8 * 100.0, 0, 100)), 2)
+    parts: list[tuple[float, float]] = []
+    if era5_soil_moisture_anomaly is not None and not pd.isna(era5_soil_moisture_anomaly):
+        parts.append((normalize_score(-float(era5_soil_moisture_anomaly), -2.0, 2.0), 1.0))
+    return _weighted_mean(parts)
+
+
+def compute_free_data_heat_drought_stress_score(
+    *,
+    modis_lst_day_mean_c: float | None = None,
+    eccc_air_temp_c: float | None = None,
+) -> float:
+    parts: list[tuple[float, float]] = []
+    if modis_lst_day_mean_c is not None and not pd.isna(modis_lst_day_mean_c):
+        parts.append((normalize_score(float(modis_lst_day_mean_c), 5, 45), 0.65))
+    elif eccc_air_temp_c is not None and not pd.isna(eccc_air_temp_c):
+        parts.append((normalize_score(float(eccc_air_temp_c), -5, 35), 0.65))
+    return _weighted_mean(parts)
+
+
+def compute_free_data_terrain_access_score(
+    *,
+    terrain_slope_mean_deg: float | None = None,
+) -> float:
+    if terrain_slope_mean_deg is None or pd.isna(terrain_slope_mean_deg):
+        return 50.0
+    slope_component = normalize_score(float(terrain_slope_mean_deg), 0, 30)
+    return round(float(np.clip(100.0 - slope_component, 0, 100)), 2)
+
+
 def calculate_surrey_planet_risk_score(
     weather_severity_score: float,
     vegetation_exposure_score: float,
@@ -209,6 +290,13 @@ def identify_top_risk_driver(row: pd.Series) -> str:
             "vegetation_dryness_score": "Planet vegetation dryness",
             "public_outage_history_score": outage_label,
             "terrain_access_score": "Terrain/access constraints",
+        }
+    elif row.get("surrey_free_data_applied"):
+        driver_map = {
+            "weather_severity_score": "Wind gust / weather severity",
+            "vegetation_exposure_score": "Open/free vegetation exposure",
+            "public_outage_history_score": outage_label,
+            "terrain_access_score": "Open/free terrain access",
         }
     else:
         driver_map = {

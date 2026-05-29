@@ -15,11 +15,29 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
-# Data artifacts
-data/raw/*
+# Data artifacts — large / local only
+data/raw/
+data/external/
+*.SAFE/
+*.tif
+*.tiff
+*.jp2
+*.las
+*.laz
+*.gpkg
+*.zip
+
+# Processed outputs (commit small CSV summaries only)
 data/processed/*
-!data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/processed/surrey_free_data_corridor_summary.csv
+!data/processed/surrey_worldcover_corridor_stats.csv
+!data/processed/surrey_nalcms_corridor_stats.csv
+!data/processed/surrey_sentinel2_corridor_stats.csv
+!data/processed/surrey_sentinel2_scene_qa.csv
+!data/processed/surrey_environmental_stress_corridor_stats.csv
+!data/processed/surrey_vri_corridor_stats.csv
+!data/processed/surrey_terrain_corridor_stats.csv
 
 # Optional full GPKG/ZIP copies (use bundled data/demo/*.geojson sample instead)
 data/lignes-transport-electrique-2020.gpkg

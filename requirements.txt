@@ -6,7 +6,10 @@ plotly
 pydeck
 geopandas
 shapely
+pyproj
 rasterio
+rasterstats
 rioxarray
 python-dotenv
 lxml
+tqdm

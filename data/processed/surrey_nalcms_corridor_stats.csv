@@ -1,0 +1,2 @@
+aoi_id,layer,data_status,data_source,as_of_date,instructions,nalcms_forest_pct
+SURREY-TX-BUF-200M,nalcms_2020,stub_missing_raster,open_free_v1,2026-05-29,NALCMS raster not bundled. Optional validation layer — download Canada LC 2020 and pass --nalcms-raster.,

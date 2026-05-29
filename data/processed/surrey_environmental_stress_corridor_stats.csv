@@ -1,0 +1,2 @@
+aoi_id,layer,data_status,data_source,as_of_date,instructions,modis_lst_day_mean_c,era5_soil_moisture_anomaly,eccc_air_temp_c_fallback
+SURREY-TX-BUF-200M,environmental_stress,stub_missing_creds,open_free_v1,2026-05-29,Set EARTHDATA_USERNAME and CDSAPI_KEY for MODIS/ERA5; using ECCC temperature fallback only. ECCC swob-realtime air temperature proxy (not LST),,,17.24
