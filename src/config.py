@@ -30,13 +30,28 @@ BC_TRANSMISSION_PROVINCE_BBOX_WGS84 = (-139.06, 48.30, -114.03, 60.00)
 BC_HYDRO_OUTAGE_JSON_URL = "https://www.bchydro.com/power-outages/app/outages-map-data.json"
 BC_HYDRO_OUTAGE_RSS_URL = "https://www.bchydro.com/rss/outages/all.xml"
 # Corporate Python 3.14+ on Windows often fails BC Hydro TLS (Missing Authority Key Identifier).
-# Unset on Windows: verify off by default (no failed verify attempt). Set BC_HYDRO_SSL_VERIFY=1 to force verify.
-# Other platforms default to verify on; set BC_HYDRO_SSL_VERIFY=0 to skip verify entirely.
+# Unset on Windows or Streamlit Cloud: verify off by default (no failed verify attempt).
+# Set BC_HYDRO_SSL_VERIFY=1 to force verify. On other local platforms, unset defaults to verify on.
+# Streamlit Cloud: set BC_HYDRO_SSL_VERIFY=0 in app Secrets if live outages fail (see README).
+
+
+def _running_on_streamlit_cloud() -> bool:
+    if os.getenv("STREAMLIT_RUNTIME_ENVIRONMENT", "").strip().lower() == "cloud":
+        return True
+    return os.getenv("USER", "").strip().lower() == "appuser"
+
+
+def _default_bc_hydro_ssl_verify() -> bool:
+    if sys.platform == "win32":
+        return False
+    if _running_on_streamlit_cloud():
+        return False
+    return True
 
 
 def _parse_bc_hydro_ssl_verify(raw: str | None) -> bool:
     if raw is None:
-        return sys.platform != "win32"
+        return _default_bc_hydro_ssl_verify()
     return raw.strip().lower() not in {"0", "false", "no"}
 
 

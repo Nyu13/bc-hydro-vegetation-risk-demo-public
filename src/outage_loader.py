@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 import requests
-from requests.exceptions import SSLError
+from requests.exceptions import RequestException, SSLError
 
 from src.area_selection import lookup_municipality_coordinates, lookup_region_coordinates
 from src.config import (
@@ -26,6 +26,14 @@ DEMO_OUTAGES_CSV = DEMO_DATA_DIR / "demo_outages.csv"
 
 LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 15
+BCHYDRO_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; BCHydroVegetationRiskDemo/1.0; "
+        "+https://github.com/bc-hydro-vegetation-risk-demo)"
+    ),
+    "Accept": "application/json, application/xml, text/xml, */*",
+}
+_last_bchydro_fetch_error: str | None = None
 RSS_HTML_FIELD_RE = re.compile(r"<td><b>([^:]+):</b></td><td>([^<]*)</td>", re.IGNORECASE)
 FALLBACK_SOURCE_MARKER = "fallback:"
 SSL_RELAXED_SOURCE_SUFFIX = " (TLS verify relaxed)"
@@ -61,6 +69,26 @@ def _empty_live_outages() -> pd.DataFrame:
     return pd.DataFrame(columns=LIVE_OUTAGE_COLUMNS + ["is_synthetic", "data_provenance", "source"])
 
 
+def bchydro_fetch_error() -> str | None:
+    """Last live BC Hydro fetch failure (for UI when synthetic fallback is off)."""
+    return _last_bchydro_fetch_error
+
+
+def _set_bchydro_fetch_error(exc: BaseException | None) -> None:
+    global _last_bchydro_fetch_error  # noqa: PLW0603
+    if exc is None:
+        _last_bchydro_fetch_error = None
+    else:
+        _last_bchydro_fetch_error = f"{type(exc).__name__}: {exc}"
+
+
+def _is_tls_failure(exc: BaseException) -> bool:
+    if isinstance(exc, SSLError):
+        return True
+    message = str(exc).lower()
+    return any(token in message for token in ("ssl", "certificate", "tls", "cert verify failed"))
+
+
 def _disable_insecure_request_warnings() -> None:
     try:
         import urllib3
@@ -79,17 +107,24 @@ def _public_http_get(url: str) -> tuple[bytes, str | None]:
     """
     global _SSL_RETRY_WARNING_EMITTED  # noqa: PLW0603
 
+    request_kwargs = {
+        "timeout": REQUEST_TIMEOUT_SECONDS,
+        "headers": BCHYDRO_HTTP_HEADERS,
+    }
+
     if not bc_hydro_ssl_verify():
         _disable_insecure_request_warnings()
-        response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS, verify=False)
+        response = requests.get(url, verify=False, **request_kwargs)
         response.raise_for_status()
         return response.content, None
 
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS, verify=True)
+        response = requests.get(url, verify=True, **request_kwargs)
         response.raise_for_status()
         return response.content, None
-    except SSLError as exc:
+    except RequestException as exc:
+        if not _is_tls_failure(exc):
+            raise
         if not _SSL_RETRY_WARNING_EMITTED:
             LOGGER.warning(
                 "Public feed TLS verification failed (%s); retrying with verify=False. "
@@ -98,7 +133,7 @@ def _public_http_get(url: str) -> tuple[bytes, str | None]:
             )
             _SSL_RETRY_WARNING_EMITTED = True
         _disable_insecure_request_warnings()
-        response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS, verify=False)
+        response = requests.get(url, verify=False, **request_kwargs)
         response.raise_for_status()
         return response.content, SSL_RELAXED_SOURCE_SUFFIX
 
@@ -501,12 +536,14 @@ def load_bchydro_outage_json(allow_synthetic_fallback: bool = True) -> pd.DataFr
         source_label = "BC Hydro outages-map-data.json (public)"
         if ssl_note:
             source_label += ssl_note
+        _set_bchydro_fetch_error(None)
         return tag_dataframe(
             normalized,
             is_synthetic=False,
             source=source_label,
         )
     except Exception as exc:  # noqa: BLE001
+        _set_bchydro_fetch_error(exc)
         if allow_synthetic_fallback:
             LOGGER.info("Outage JSON unavailable; using demo fallback. Details: %s", exc)
             return _load_demo_outages_tagged(
@@ -546,12 +583,14 @@ def load_bchydro_rss(allow_synthetic_fallback: bool = True) -> pd.DataFrame:
         source_label = "BC Hydro outage RSS (public)"
         if ssl_note:
             source_label += ssl_note
+        _set_bchydro_fetch_error(None)
         return tag_dataframe(
             normalized,
             is_synthetic=False,
             source=source_label,
         )
     except Exception as exc:  # noqa: BLE001
+        _set_bchydro_fetch_error(exc)
         if allow_synthetic_fallback:
             LOGGER.info("Outage RSS unavailable; using demo fallback. Details: %s", exc)
             demo = _load_demo_outages_tagged(

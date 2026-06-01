@@ -16,6 +16,7 @@ This dashboard is an illustrative prototype and must not be used for operational
 
 ## Public/Proxy Data Explanation
 
+- **Streamlit Cloud:** live BC Hydro HTTPS may fail Python TLS verification. The app defaults to relaxed TLS on Cloud; set `BC_HYDRO_SSL_VERIFY = "0"` in Cloud **Secrets** if outages are empty (see `.streamlit/secrets.toml.example` and README).
 - Public outage status sources (JSON/RSS) are used for current/recent visibility.
 - Unofficial public snapshot archive is used only as a historical proxy reference.
 - Public transmission geometry is treated as corridor proxy, not feeder topology.

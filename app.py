@@ -1,11 +1,25 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import pandas as pd
 import plotly.express as px
 import pydeck as pdk
 import streamlit as st
+
+
+def _apply_streamlit_secrets_to_env() -> None:
+    """Map Cloud/local secrets.toml keys into os.environ before live loaders run."""
+    try:
+        for key in ("BC_HYDRO_SSL_VERIFY", "DEMO_OFFLINE_MODE"):
+            if key in st.secrets:
+                os.environ[key] = str(st.secrets[key])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_apply_streamlit_secrets_to_env()
 
 from src.backtesting import compute_backtesting_metrics, load_backtesting_data
 from src.config import (
@@ -42,6 +56,7 @@ from src.data_provenance import (
 )
 from src.data_sources import DATA_SOURCES
 from src.outage_loader import (
+    bchydro_fetch_error,
     live_outage_metrics,
     load_bchydro_outage_json,
     load_bchydro_rss,
@@ -389,8 +404,19 @@ def _show_weather_dataframe(
     )
 
 
+def _render_live_outage_fetch_error() -> None:
+    err = bchydro_fetch_error()
+    if err:
+        st.error(
+            f"**Live BC Hydro outage fetch failed:** {err}  \n"
+            "On Streamlit Cloud, set `BC_HYDRO_SSL_VERIFY = \"0\"` in **App settings → Secrets** "
+            "(see `.streamlit/secrets.toml.example`), then **Refresh live data**."
+        )
+
+
 def _render_outage_provenance_alerts(*provs: DatasetProvenance) -> None:
     """Surface fetch/fallback/TLS reasons when outage feeds are not live."""
+    _render_live_outage_fetch_error()
     for prov in provs:
         if prov.is_synthetic and "demo fallback because" in prov.detail.lower():
             st.warning(prov.detail.split("  \n", 1)[0])

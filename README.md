@@ -71,14 +71,22 @@ set BC_HYDRO_SSL_VERIFY=0
 streamlit run app.py
 ```
 
-**Linux/macOS:** verification is **on** when unset. To disable:
+**Linux/macOS (local):** verification is **on** when unset. To disable:
 
 ```bash
 export BC_HYDRO_SSL_VERIFY=0
 streamlit run app.py
 ```
 
-After changing env vars, **restart** Streamlit (env is read at process start) and use sidebar **Refresh live data**. On non-Windows platforms, if verify is enabled and TLS fails, loaders retry once without verification (one warning per process).
+**Streamlit Community Cloud ([share.streamlit.io](https://share.streamlit.io)):** the app defaults to `verify=False` on Cloud (same as Windows). If live outages are still empty, add to **App settings → Secrets**:
+
+```toml
+BC_HYDRO_SSL_VERIFY = "0"
+```
+
+See `.streamlit/secrets.toml.example`. After saving secrets, redeploy or restart the app and use sidebar **Refresh live data**.
+
+After changing env vars or secrets, **restart** Streamlit and use **Refresh live data**. On local Linux/macOS, if verify is enabled and TLS fails, loaders retry once without verification (one warning per process).
 
 **Expected live counts (May 2026 example):** ~40 JSON outages province-wide; RSS ~60 items (~40 active). **Surrey** pilot slice: **3** current outages, **54** customers in public JSON/RSS (BC Hydro website totals can differ by aggregation).
 
