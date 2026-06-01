@@ -36,6 +36,7 @@ data/processed/*
 !data/processed/surrey_sentinel2_corridor_stats.csv
 !data/processed/surrey_sentinel2_scene_qa.csv
 !data/processed/surrey_environmental_stress_corridor_stats.csv
+!data/processed/surrey_eccc_weather_stress_stats.csv
 !data/processed/surrey_vri_corridor_stats.csv
 !data/processed/surrey_terrain_corridor_stats.csv
 

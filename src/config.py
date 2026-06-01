@@ -94,6 +94,7 @@ SURREY_FREE_DATA_SUMMARY_CSV = PROCESSED_DATA_DIR / "surrey_free_data_corridor_s
 SURREY_FREE_DATA_PLACEHOLDER_CSV = DEMO_DATA_DIR / "surrey_free_data_corridor_summary_placeholder.csv"
 SURREY_SENTINEL2_STATS_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_corridor_stats.csv"
 SURREY_SENTINEL2_SCENE_QA_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_scene_qa.csv"
+SURREY_ECCC_WEATHER_STRESS_CSV = PROCESSED_DATA_DIR / "surrey_eccc_weather_stress_stats.csv"
 
 PLANET_POC_DISCLAIMER = (
     "Planet layers are proposed remote-sensing inputs for the Surrey proof-of-process. "

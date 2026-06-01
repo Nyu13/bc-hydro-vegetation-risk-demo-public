@@ -38,6 +38,19 @@ DATA_SOURCES = [
         ),
     },
     {
+        "name": "ECCC weather stress proxy (Surrey corridor)",
+        "url": "https://api.weather.gc.ca/",
+        "classification": "Open/free processed",
+        "type": "Atmospheric weather stress — wind, precipitation, air temperature, short-term dryness proxy",
+        "formal_poc_replacement": "Planet LST 100 m, SWC 100 m, and BC Hydro-aligned environmental monitoring",
+        "notes": (
+            "Pipeline: TMP/scripts/build_surrey_environmental_stress.py → "
+            "data/processed/surrey_eccc_weather_stress_stats.csv. "
+            "Uses MSC GeoMet via src/weather_loader.py (live or demo_weather.csv fallback). "
+            "Not true soil moisture, not land surface temperature, not canopy stress."
+        ),
+    },
+    {
         "name": "Environment and Climate Change Canada",
         "url": "https://api.weather.gc.ca/",
         "classification": "Public",

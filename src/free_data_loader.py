@@ -9,6 +9,7 @@ import pandas as pd
 
 from src.config import (
     DEMO_DATA_DIR,
+    SURREY_ECCC_WEATHER_STRESS_CSV,
     SURREY_FREE_DATA_SUMMARY_CSV,
     SURREY_SENTINEL2_SCENE_QA_CSV,
     SURREY_SENTINEL2_STATS_CSV,
@@ -49,6 +50,7 @@ FREE_DATA_SUMMARY_COLUMNS = (
     "canopy_exposure_score",
     "vegetation_dryness_score",
     "heat_drought_stress_score",
+    "environmental_stress_notes",
     "terrain_access_score",
     "data_source",
     "data_status",
@@ -165,6 +167,7 @@ def free_data_scores_from_row(row: pd.Series | None) -> dict[str, float]:
             era5_soil_moisture_anomaly=_float(row.get("era5_soil_moisture_anomaly")),
         ),
         "heat_drought_stress_score": compute_free_data_heat_drought_stress_score(
+            eccc_weather_stress_score=_float(row.get("eccc_weather_stress_score")),
             modis_lst_day_mean_c=_float(row.get("modis_lst_day_mean_c")),
         ),
         "terrain_access_score": compute_free_data_terrain_access_score(
@@ -184,6 +187,48 @@ class Sentinel2StatsLoadResult:
     detail: str
     row: pd.Series | None
     df: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class EcccWeatherStressLoadResult:
+    status: str  # not_loaded | unavailable | open_free_processed
+    detail: str
+    row: pd.Series | None
+    df: pd.DataFrame
+
+
+def load_surrey_eccc_weather_stress(csv_path: Path | None = None) -> EcccWeatherStressLoadResult:
+    """Load processed ECCC atmospheric weather stress proxy CSV when present."""
+    path = csv_path or SURREY_ECCC_WEATHER_STRESS_CSV
+    if not path.is_file():
+        return EcccWeatherStressLoadResult(
+            status="not_loaded",
+            detail="No ECCC weather stress CSV — run TMP/scripts/build_surrey_environmental_stress.py",
+            row=None,
+            df=pd.DataFrame(),
+        )
+    df = pd.read_csv(path)
+    if df.empty:
+        return EcccWeatherStressLoadResult(
+            status="not_loaded",
+            detail=f"ECCC weather stress CSV empty: {path.name}",
+            row=None,
+            df=df,
+        )
+    row = df.iloc[0]
+    normalized = str(row.get("data_status", "")).strip().lower()
+    if normalized == "open_free_processed":
+        status = "open_free_processed"
+    elif normalized == "unavailable":
+        status = "unavailable"
+    else:
+        status = "stub"
+    return EcccWeatherStressLoadResult(
+        status=status,
+        detail=f"{path.name} ({status})",
+        row=row,
+        df=df,
+    )
 
 
 def load_surrey_sentinel2_stats(csv_path: Path | None = None) -> Sentinel2StatsLoadResult:

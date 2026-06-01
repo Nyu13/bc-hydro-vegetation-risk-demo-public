@@ -206,13 +206,96 @@ def compute_free_data_heat_drought_stress_score(
     *,
     modis_lst_day_mean_c: float | None = None,
     eccc_air_temp_c: float | None = None,
+    eccc_weather_stress_score: float | None = None,
 ) -> float:
+    if eccc_weather_stress_score is not None and not pd.isna(eccc_weather_stress_score):
+        return round(float(np.clip(float(eccc_weather_stress_score), 0, 100)), 2)
     parts: list[tuple[float, float]] = []
     if modis_lst_day_mean_c is not None and not pd.isna(modis_lst_day_mean_c):
         parts.append((normalize_score(float(modis_lst_day_mean_c), 5, 45), 0.65))
     elif eccc_air_temp_c is not None and not pd.isna(eccc_air_temp_c):
         parts.append((normalize_score(float(eccc_air_temp_c), -5, 35), 0.65))
     return _weighted_mean(parts)
+
+
+def compute_eccc_wind_gust_stress_score(wind_gust_max_kmh: float | None) -> float | None:
+    """Normalize max gust 0–100 km/h to 0–100 stress score."""
+    if wind_gust_max_kmh is None or pd.isna(wind_gust_max_kmh):
+        return None
+    return round(float(np.clip(normalize_score(float(wind_gust_max_kmh), 0, 100), 0, 100)), 2)
+
+
+def compute_eccc_precipitation_stress_score(precip_total_mm: float | None) -> float | None:
+    """Normalize recent precipitation total 0–50 mm to 0–100 stress score."""
+    if precip_total_mm is None or pd.isna(precip_total_mm):
+        return None
+    return round(float(np.clip(normalize_score(float(precip_total_mm), 0, 50), 0, 100)), 2)
+
+
+def compute_eccc_temperature_stress_score(temp_mean_c: float | None) -> float | None:
+    """Deviation from mild 10 °C reference; capped at 100."""
+    if temp_mean_c is None or pd.isna(temp_mean_c):
+        return None
+    return round(float(np.clip(min(abs(float(temp_mean_c) - 10.0) * 4.0, 100.0), 0, 100)), 2)
+
+
+def compute_eccc_short_term_dryness_proxy_score(precip_total_mm: float | None) -> float | None:
+    """Atmospheric short-term dryness proxy from recent precipitation total (not soil moisture)."""
+    if precip_total_mm is None or pd.isna(precip_total_mm):
+        return None
+    precip = float(precip_total_mm)
+    if precip < 2.0:
+        return 75.0
+    if precip <= 10.0:
+        return 40.0
+    return 10.0
+
+
+def compute_eccc_weather_stress_score(
+    *,
+    wind_gust_max_kmh: float | None = None,
+    precip_total_mm: float | None = None,
+    temp_mean_c: float | None = None,
+    wind_gust_stress_score: float | None = None,
+    precipitation_stress_score: float | None = None,
+    temperature_stress_score: float | None = None,
+    short_term_dryness_proxy_score: float | None = None,
+) -> float | None:
+    """Composite ECCC atmospheric weather stress proxy (not LST or soil water content)."""
+    wind = (
+        wind_gust_stress_score
+        if wind_gust_stress_score is not None and not pd.isna(wind_gust_stress_score)
+        else compute_eccc_wind_gust_stress_score(wind_gust_max_kmh)
+    )
+    precip = (
+        precipitation_stress_score
+        if precipitation_stress_score is not None and not pd.isna(precipitation_stress_score)
+        else compute_eccc_precipitation_stress_score(precip_total_mm)
+    )
+    temp = (
+        temperature_stress_score
+        if temperature_stress_score is not None and not pd.isna(temperature_stress_score)
+        else compute_eccc_temperature_stress_score(temp_mean_c)
+    )
+    dryness = (
+        short_term_dryness_proxy_score
+        if short_term_dryness_proxy_score is not None and not pd.isna(short_term_dryness_proxy_score)
+        else compute_eccc_short_term_dryness_proxy_score(precip_total_mm)
+    )
+    parts: list[tuple[float, float]] = []
+    if wind is not None:
+        parts.append((wind, 0.40))
+    if precip is not None:
+        parts.append((precip, 0.25))
+    if temp is not None:
+        parts.append((temp, 0.20))
+    if dryness is not None:
+        parts.append((dryness, 0.15))
+    if not parts:
+        return None
+    total_w = sum(w for _, w in parts)
+    score = sum(v * w for v, w in parts) / total_w
+    return round(float(np.clip(score, 0, 100)), 2)
 
 
 def compute_free_data_terrain_access_score(

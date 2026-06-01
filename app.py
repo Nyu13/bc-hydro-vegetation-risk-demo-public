@@ -25,6 +25,7 @@ from src.config import (
     PLANET_POC_DISCLAIMER,
     PROCESSED_DATA_DIR,
     SURREY_FREE_DATA_SUMMARY_CSV,
+    SURREY_ECCC_WEATHER_STRESS_CSV,
     SURREY_SENTINEL2_STATS_CSV,
     SURREY_WORLDCOVER_STATS_CSV,
 )
@@ -81,6 +82,7 @@ from src.planet_loader import (
 from src.free_data_loader import (
     free_data_scores_from_row,
     free_data_usable,
+    load_surrey_eccc_weather_stress,
     load_surrey_free_data_summary,
     load_surrey_sentinel2_scene_qa,
     load_surrey_sentinel2_stats,
@@ -1376,6 +1378,55 @@ def _first_present(*values: object) -> object | None:
     return None
 
 
+def _render_worldcover_sentinel2_context_copy() -> None:
+    st.markdown(
+        """
+        WorldCover provides static land-cover exposure. Sentinel-2 provides vegetation condition
+        and moisture proxies using NDVI and NDMI. Together, these open/free layers reduce synthetic
+        assumptions in **Public/proxy** mode before Planet data is purchased.
+        """
+    )
+    st.markdown(
+        """
+        Clear AOI pixels are limited after cloud masking, which is expected in coastal BC. The
+        Sentinel-2 layer is suitable for proof-of-process, but not operational decision-making. This
+        limitation supports the case for Planet or other analysis-ready commercial products.
+        """
+    )
+
+
+def _render_eccc_weather_stress_disclaimer_copy() -> None:
+    st.markdown(
+        """
+        ECCC atmospheric weather stress proxy uses air temperature, wind gust, and precipitation.
+        It does not represent land surface temperature, soil water content, or canopy stress.
+        """
+    )
+
+
+def _render_surrey_poc_outcomes_sections() -> None:
+    st.markdown("#### What this proves")
+    st.markdown(
+        """
+        - We can define a focused Surrey corridor AOI.
+        - We can ingest public outage, weather, corridor, and satellite data.
+        - We can convert open/free satellite layers into model features.
+        - We can show risk drivers and data quality transparently.
+        - We can compare future Planet data against an open-data baseline.
+        """
+    )
+    st.markdown("#### What Planet would improve")
+    st.markdown(
+        """
+        - Higher-resolution canopy structure.
+        - More frequent vegetation condition updates.
+        - Commercial-ready soil water content and land surface temperature.
+        - Better change detection and delivery workflow.
+        - Clear licensing for internal and client-facing proof-of-process use.
+        """
+    )
+
+
 def _aoi_display_label(aoi_id: object) -> str:
     text = str(aoi_id or "").strip().upper()
     if text == "SURREY-TX-BUF-200M":
@@ -1484,16 +1535,7 @@ def _render_surrey_open_free_satellite_section() -> None:
         _metric_text(cloud_pct, suffix="%"),
     )
 
-    st.markdown(
-        "WorldCover provides static land-cover exposure. Sentinel-2 provides vegetation condition "
-        "and moisture proxies using NDVI and NDMI. Together, these open/free layers reduce synthetic "
-        "assumptions in **Public/proxy** mode before Planet data is purchased."
-    )
-    st.caption(
-        "Clear AOI pixels are limited after cloud masking, which is expected in coastal BC. "
-        "The Sentinel-2 layer is suitable for proof-of-process, but not operational decision-making. "
-        "This limitation supports the case for Planet or other analysis-ready commercial products."
-    )
+    _render_worldcover_sentinel2_context_copy()
 
     qa_df = load_surrey_sentinel2_scene_qa()
     if qa_df.empty:
@@ -1541,6 +1583,65 @@ def _render_surrey_open_free_satellite_section() -> None:
             st.info("Scene-level Sentinel-2 QA file not available.")
         else:
             st.dataframe(table_df, width="stretch", hide_index=True)
+
+
+def _eccc_weather_stress_status_badge(*, weather_result: WeatherLoadResult | None = None) -> str:
+    eccc = load_surrey_eccc_weather_stress()
+    if eccc.status == "open_free_processed":
+        row = eccc.row
+        source = str(row.get("data_source", "")) if row is not None else ""
+        if "demo_weather" in source.lower():
+            return "🟦 Open/free processed (demo_weather.csv fallback)"
+        if weather_result is not None and not weather_result.is_synthetic:
+            return "🟢 Live public"
+        return "🟦 Open/free processed"
+    if eccc.status == "unavailable":
+        return "🔴 Unavailable"
+    if eccc.status == "not_loaded":
+        return "🔴 Not built — run build_surrey_environmental_stress.py"
+    return "🟦 Open/free processed (stub)"
+
+
+def _render_surrey_eccc_weather_stress_section() -> None:
+    """Metric cards for ECCC atmospheric weather stress proxy."""
+    st.markdown("#### ECCC weather stress proxy")
+    eccc = load_surrey_eccc_weather_stress()
+    free_data = load_surrey_free_data_summary()
+    row = eccc.row
+    summary_row = free_data.row
+
+    if eccc.status != "open_free_processed" or row is None:
+        st.info(
+            "ECCC weather stress proxy not built yet — run "
+            "TMP/scripts/build_surrey_environmental_stress.py."
+        )
+    else:
+        stress_score = _first_present(
+            row.get("eccc_weather_stress_score"),
+            summary_row.get("heat_drought_stress_score") if summary_row is not None else None,
+        )
+        cards = st.columns(4)
+        cards[0].metric(
+            "Mean air temperature",
+            _metric_text(row.get("eccc_temperature_mean_c"), suffix=" °C"),
+        )
+        cards[1].metric(
+            "Max wind gust",
+            _metric_text(row.get("eccc_wind_gust_max_kmh"), suffix=" km/h"),
+        )
+        cards[2].metric(
+            "Total precipitation",
+            _metric_text(row.get("eccc_precip_total_mm"), suffix=" mm"),
+        )
+        cards[3].metric("ECCC weather stress score", _metric_text(stress_score))
+
+        _render_eccc_weather_stress_disclaimer_copy()
+        notes = _first_present(
+            row.get("notes"),
+            summary_row.get("environmental_stress_notes") if summary_row is not None else None,
+        )
+        if notes:
+            st.caption(f"Pipeline notes: {notes}")
 
 
 def _open_free_layer_status(*paths: Any) -> str:
@@ -1695,10 +1796,11 @@ def _build_unified_layer_inventory_table(
     )
     lst_status = _normalize_open_free_status(
         _open_free_layer_status(
-            PROCESSED_DATA_DIR / "surrey_environmental_stress_corridor_stats.csv",
+            SURREY_ECCC_WEATHER_STRESS_CSV,
             SURREY_FREE_DATA_SUMMARY_CSV,
         )
     )
+    eccc_stress_status = _eccc_weather_stress_status_badge(weather_result=weather_result)
     lidar_status = (
         "🟦 Plan written"
         if (DOCS_DIR / "surrey_lidar_canopy_height_plan.md").is_file()
@@ -1797,6 +1899,16 @@ def _build_unified_layer_inventory_table(
                 "Status": vri_status,
                 "Demo use": "Stand height, crown closure in forested segments",
                 "Limitation": "Sparse urban coverage",
+            },
+            {
+                "Layer": "ECCC weather stress proxy",
+                "Source": "ECCC / MSC GeoMet — build_surrey_environmental_stress.py",
+                "Status": eccc_stress_status,
+                "Demo use": "heat_drought_stress_score / atmospheric weather stress",
+                "Limitation": (
+                    "Wind, precipitation, air temperature, short-term dryness proxy only — "
+                    "not true soil moisture, not LST, not canopy stress"
+                ),
             },
             {
                 "Layer": "Landsat / MODIS LST",
@@ -1907,6 +2019,10 @@ def _render_data_sources_assumptions_tab(
     )
 
     planet_result = load_planet_surrey_sample(DEMO_DATA_MODE)
+
+    st.subheader("Open/free satellite & weather proxies")
+    _render_worldcover_sentinel2_context_copy()
+    _render_eccc_weather_stress_disclaimer_copy()
 
     st.subheader("Layer inventory")
     st.dataframe(
@@ -2054,10 +2170,8 @@ def _surrey_poc_tab() -> None:
         f"Planet sample: **{_planet_sample_status_label()}**"
     )
     _render_surrey_open_free_satellite_section()
-    st.caption(
-        "Full layer inventory (live status, open/free, Planet, internal gaps): "
-        "**Data Sources & Assumptions** tab."
-    )
+    _render_surrey_eccc_weather_stress_section()
+    _render_surrey_poc_outcomes_sections()
 
 
 tabs = st.tabs(
@@ -2073,6 +2187,13 @@ tabs = st.tabs(
 )
 
 with tabs[0]:
+    st.markdown("### Manager summary")
+    st.info(
+        "Current demo maturity: working proof-of-process using public/proxy data. The Surrey "
+        "example now includes real open/free satellite layers from WorldCover and Sentinel-2. "
+        "Planet is not required to demonstrate the workflow, but it could improve the "
+        "remote-sensing layer with higher-resolution, more frequent, commercial-ready products."
+    )
     st.markdown("### What this demo shows")
     st.markdown(
         """
