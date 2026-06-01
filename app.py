@@ -712,20 +712,19 @@ def _render_live_outages_section(
         )
         return
     row_label = "row" if province_count == 1 else "rows"
-    st.caption(f"All regions — map JSON ({province_count} {row_label})")
-    _show_dataframe_with_provenance(outages_json_df)
+    with st.expander(
+        f"All regions — map JSON ({province_count} {row_label})",
+        expanded=False,
+    ):
+        _show_dataframe_with_provenance(outages_json_df)
+    pilot_row_label = "row" if pilot_count == 1 else "rows"
+    st.caption(
+        f"{DEMO_PILOT_MUNICIPALITY} — map JSON ({pilot_count} of {province_count} {pilot_row_label})"
+    )
     if pilot_count > 0:
-        pilot_row_label = "row" if pilot_count == 1 else "rows"
-        with st.expander(
-            f"{DEMO_PILOT_MUNICIPALITY} — map JSON ({pilot_count} of {province_count} {pilot_row_label})",
-            expanded=False,
-        ):
-            _show_dataframe_with_provenance(pilot_outages)
+        _show_dataframe_with_provenance(pilot_outages)
     else:
-        st.caption(
-            f"No {DEMO_PILOT_MUNICIPALITY} rows in the current map JSON feed "
-            f"({province_count} province-wide)."
-        )
+        st.info(f"No {DEMO_PILOT_MUNICIPALITY} outages in the current map JSON feed.")
 
 
 def _area_selection_column_config() -> dict:
@@ -1378,32 +1377,6 @@ def _first_present(*values: object) -> object | None:
     return None
 
 
-def _render_worldcover_sentinel2_context_copy() -> None:
-    st.markdown(
-        """
-        WorldCover provides static land-cover exposure. Sentinel-2 provides vegetation condition
-        and moisture proxies using NDVI and NDMI. Together, these open/free layers reduce synthetic
-        assumptions in **Public/proxy** mode before Planet data is purchased.
-        """
-    )
-    st.markdown(
-        """
-        Clear AOI pixels are limited after cloud masking, which is expected in coastal BC. The
-        Sentinel-2 layer is suitable for proof-of-process, but not operational decision-making. This
-        limitation supports the case for Planet or other analysis-ready commercial products.
-        """
-    )
-
-
-def _render_eccc_weather_stress_disclaimer_copy() -> None:
-    st.markdown(
-        """
-        ECCC atmospheric weather stress proxy uses air temperature, wind gust, and precipitation.
-        It does not represent land surface temperature, soil water content, or canopy stress.
-        """
-    )
-
-
 def _render_surrey_poc_outcomes_sections() -> None:
     st.markdown("#### What this proves")
     st.markdown(
@@ -1443,7 +1416,7 @@ def _load_surrey_sentinel2_stats_df() -> pd.DataFrame:
 
 def _render_surrey_open_free_satellite_section() -> None:
     """Summary cards, trend chart, and scene QA for open/free satellite layers."""
-    st.markdown("#### Open/free satellite data now active")
+    st.markdown("#### Open/free satellite summary (Surrey corridor)")
 
     free_data = load_surrey_free_data_summary()
     stats_df = _load_surrey_sentinel2_stats_df()
@@ -1534,8 +1507,6 @@ def _render_surrey_open_free_satellite_section() -> None:
         "Clear AOI pixels (cloud mask)",
         _metric_text(cloud_pct, suffix="%"),
     )
-
-    _render_worldcover_sentinel2_context_copy()
 
     qa_df = load_surrey_sentinel2_scene_qa()
     if qa_df.empty:
@@ -1634,14 +1605,6 @@ def _render_surrey_eccc_weather_stress_section() -> None:
             _metric_text(row.get("eccc_precip_total_mm"), suffix=" mm"),
         )
         cards[3].metric("ECCC weather stress score", _metric_text(stress_score))
-
-        _render_eccc_weather_stress_disclaimer_copy()
-        notes = _first_present(
-            row.get("notes"),
-            summary_row.get("environmental_stress_notes") if summary_row is not None else None,
-        )
-        if notes:
-            st.caption(f"Pipeline notes: {notes}")
 
 
 def _open_free_layer_status(*paths: Any) -> str:
@@ -2020,9 +1983,7 @@ def _render_data_sources_assumptions_tab(
 
     planet_result = load_planet_surrey_sample(DEMO_DATA_MODE)
 
-    st.subheader("Open/free satellite & weather proxies")
-    _render_worldcover_sentinel2_context_copy()
-    _render_eccc_weather_stress_disclaimer_copy()
+    _render_surrey_poc_outcomes_sections()
 
     st.subheader("Layer inventory")
     st.dataframe(
@@ -2171,7 +2132,6 @@ def _surrey_poc_tab() -> None:
     )
     _render_surrey_open_free_satellite_section()
     _render_surrey_eccc_weather_stress_section()
-    _render_surrey_poc_outcomes_sections()
 
 
 tabs = st.tabs(
@@ -2179,21 +2139,14 @@ tabs = st.tabs(
         "Overview",
         "Risk Dashboard",
         "Risk Map",
-        "Area selection",
         "Surrey PoC Sample",
         "Backtesting",
+        "Area selection",
         "Data Sources & Assumptions",
     ]
 )
 
 with tabs[0]:
-    st.markdown("### Manager summary")
-    st.info(
-        "Current demo maturity: working proof-of-process using public/proxy data. The Surrey "
-        "example now includes real open/free satellite layers from WorldCover and Sentinel-2. "
-        "Planet is not required to demonstrate the workflow, but it could improve the "
-        "remote-sensing layer with higher-resolution, more frequent, commercial-ready products."
-    )
     st.markdown("### What this demo shows")
     st.markdown(
         """
@@ -2320,12 +2273,9 @@ with tabs[2]:
     )
 
 with tabs[3]:
-    _area_selection_tab()
-
-with tabs[4]:
     _surrey_poc_tab()
 
-with tabs[5]:
+with tabs[4]:
     st.subheader("Backtesting")
     st.warning("Synthetic demo backtesting only — not validated historical outage performance.")
     st.caption(f"{provenance_badge(True)} No public live backtesting feed — `demo_backtesting.csv` only.")
@@ -2348,6 +2298,9 @@ with tabs[5]:
     st.plotly_chart(fig, width="stretch")
     with st.expander(f"Show backtesting input table — {provenance_badge(True)}"):
         _show_dataframe_with_provenance(backtesting_df, alt_highlight=True)
+
+with tabs[5]:
+    _area_selection_tab()
 
 with tabs[6]:
     _ds_weather = _load_weather()
