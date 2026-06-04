@@ -340,8 +340,10 @@ def _compute_indices_masked(
 
     ndvi_denom = nir_c + red_c
     ndmi_denom = nir_c + swir_c
-    ndvi = np.where(ndvi_denom != 0, (nir_c - red_c) / ndvi_denom, np.nan)
-    ndmi = np.where(ndmi_denom != 0, (nir_c - swir_c) / ndmi_denom, np.nan)
+    ndvi = np.full(ndvi_denom.shape, np.nan, dtype=np.float64)
+    ndmi = np.full(ndmi_denom.shape, np.nan, dtype=np.float64)
+    np.divide(nir_c - red_c, ndvi_denom, out=ndvi, where=ndvi_denom != 0)
+    np.divide(nir_c - swir_c, ndmi_denom, out=ndmi, where=ndmi_denom != 0)
 
     ndvi_mean = float(np.nanmean(ndvi)) if np.any(np.isfinite(ndvi)) else None
     ndmi_mean = float(np.nanmean(ndmi)) if np.any(np.isfinite(ndmi)) else None

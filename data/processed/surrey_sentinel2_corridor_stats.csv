@@ -1,2 +1,2 @@
 aoi_id,layer,data_status,data_source,as_of_date,period_start,period_end,scenes_used,tiles_used,instructions,sentinel2_ndvi_mean,sentinel2_ndmi_mean,cloud_filtered_pct,sentinel2_ndvi_change,sentinel2_ndmi_change,change_notes
-SURREY-TX-BUF-200M,sentinel2_l2a,open_free_processed,open_free_v1,2026-05-29,2026-01-19,2026-05-11,15,"T10UDV,T10UEV",,0.2419,0.0397,12.05,0.1001,0.0185,
+SURREY-TX-BUF-200M,sentinel2_l2a,open_free_processed,open_free_v1,2026-06-04,2026-01-19,2026-05-31,27,"T10UDV,T10UEV",,0.2447,0.0392,10.75,0.1156,0.0266,
