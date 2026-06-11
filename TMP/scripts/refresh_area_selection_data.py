@@ -50,6 +50,13 @@ def main() -> None:
     mun_df[MUN_COLS].to_csv(DEMO_DIR / "demo_municipality_outage_summary.csv", index=False)
     shutil.copy2(mun_src, PROCESSED_DIR / "municipality_summary.csv")
 
+    history_src = EXTRACTOR_PROCESSED / "bchydro_public_outages_history.parquet"
+    if history_src.exists():
+        shutil.copy2(history_src, PROCESSED_DIR / "bchydro_public_outages_history.parquet")
+        print(f"Copied {history_src.name} to data/processed/")
+    else:
+        print(f"WARNING: {history_src} not found; causal AI daily outage matching will use EXTRACTOR_OUTPUT_DIR")
+
     print("Wrote demo_region_outage_summary.csv and demo_municipality_outage_summary.csv")
     print("Copied full summaries to data/processed/")
 
