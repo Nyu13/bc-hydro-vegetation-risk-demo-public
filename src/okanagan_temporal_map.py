@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import math
@@ -12,7 +11,6 @@ from typing import Any
 from urllib.parse import urlencode
 
 import pandas as pd
-from pydeck.types import String
 from requests.exceptions import HTTPError, RequestException
 
 from src.cwfis_fwi import (
@@ -442,11 +440,7 @@ def fwi_png_to_rgba_array(png_bytes: bytes) -> Any:
     return np.array(image, dtype=np.uint8)
 
 
-def fwi_png_to_pydeck_image(png_bytes: bytes) -> String:
-    """Encode WMS PNG for pydeck BitmapLayer (base64 data URL, not raw ndarray)."""
-    encoded = base64.b64encode(png_bytes).decode("utf-8")
-    return String(f"data:image/png;base64,{encoded}", quote_type='"')
-
+from src.map_geojson import fwi_png_to_pydeck_image
 def fwi_source_caption(selected_date: date | str) -> str:
     scene_date = selected_date.isoformat() if isinstance(selected_date, date) else str(selected_date)[:10]
     return f"{CWFIS_FWI_SOURCE_LABEL} — map date {scene_date}"

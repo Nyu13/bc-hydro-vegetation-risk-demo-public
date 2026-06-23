@@ -24,11 +24,8 @@ from src.cwfis_fwi import (
     fwi_risk_band_label,
     fwi_to_rgba_continuous,
 )
-from src.okanagan_map_layers import (
-    _load_geojson_features,
-    _resolve_bc_transmission_geojson,
-    outage_marker_color,
-)
+from src.data_provenance import outage_marker_color
+from src.map_geojson import load_geojson_features, resolve_bc_transmission_geojson
 from src.regions import OKANAGAN_AOI_BBOX, OKANAGAN_MAP_ZOOM, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON
 
 LEAFLET_VERSION = "1.9.4"
@@ -40,7 +37,7 @@ _SEGMENT_POPUP_FOOTER_HTML = (
 
 
 def _geojson_file_payload(path: Path) -> dict[str, Any] | None:
-    features = _load_geojson_features(path)
+    features = load_geojson_features(path)
     if not features:
         return None
     return {"type": "FeatureCollection", "features": features}
@@ -365,7 +362,7 @@ def _segment_geojson(
     )
 
     features: list[dict[str, Any]] = []
-    for feature in _load_geojson_features(segments_geojson_path):
+    for feature in load_geojson_features(segments_geojson_path):
         props = feature.get("properties") or {}
         segment_id = str(props.get("segment_id", ""))
         row = row_lookup.get(segment_id)
@@ -498,7 +495,7 @@ def _resolve_transmission_geojson(candidates: tuple[Path, ...] | None = None) ->
     for path in candidates or ():
         if path.is_file():
             return path
-    return _resolve_bc_transmission_geojson()
+    return resolve_bc_transmission_geojson()
 
 
 def build_okanagan_leaflet_map_html(

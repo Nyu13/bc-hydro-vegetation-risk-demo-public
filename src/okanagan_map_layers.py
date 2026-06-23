@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -11,14 +10,12 @@ import pandas as pd
 import pydeck as pdk
 
 from src.config import (
-    BC_TRANSMISSION_LINES_GEOJSON,
-    BC_TRANSMISSION_OVERLAY_CANDIDATES,
     OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
     OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
 )
 from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, FWI_LEGEND_STOPS, fwi_to_rgba
-from src.okanagan_temporal_map import fwi_png_to_pydeck_image
 from src.data_provenance import outage_marker_color
+from src.map_geojson import fwi_png_to_pydeck_image, load_geojson_features, resolve_bc_transmission_geojson
 from src.outage_loader import outage_has_polygon_row
 from src.regions import (
     OKANAGAN_AOI_BBOX,
@@ -70,32 +67,12 @@ def _geometry_to_paths(geom: dict) -> list[list[list[float]]]:
     return []
 
 
-def _load_geojson_features(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    try:
-        with path.open(encoding="utf-8") as fh:
-            payload = json.load(fh)
-    except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("Failed to read GeoJSON %s: %s", path, exc)
-        return []
-    return payload.get("features") or []
-
-
-def _resolve_bc_transmission_geojson() -> Path:
-    """Province-wide transmission lines for map context (no region AOI clip)."""
-    for path in BC_TRANSMISSION_OVERLAY_CANDIDATES:
-        if path.is_file():
-            return path
-    return BC_TRANSMISSION_LINES_GEOJSON
-
-
 def bc_transmission_path_layer() -> pdk.Layer | None:
     """BC Geographic Warehouse HV transmission lines (province-wide when available)."""
-    source_path = _resolve_bc_transmission_geojson()
+    source_path = resolve_bc_transmission_geojson()
     rows: list[dict] = []
     province_wide = source_path.name.startswith("bc_transmission_lines")
-    for feature in _load_geojson_features(source_path):
+    for feature in load_geojson_features(source_path):
         props = feature.get("properties") or {}
         geom = feature.get("geometry") or {}
         line_id = props.get("line_id", props.get("TRANSMISSION_LINE_ID", ""))
@@ -132,7 +109,7 @@ def okanagan_transmission_path_layer() -> pdk.Layer | None:
 
 def okanagan_buffer_geojson_layer() -> pdk.Layer | None:
     """200 m corridor buffer polygons."""
-    features = _load_geojson_features(OKANAGAN_CORRIDOR_BUFFER_GEOJSON)
+    features = load_geojson_features(OKANAGAN_CORRIDOR_BUFFER_GEOJSON)
     if not features:
         return None
     return pdk.Layer(
@@ -349,7 +326,7 @@ def okanagan_segment_priority_path_layer(planning_df: pd.DataFrame) -> pdk.Layer
         "Low": [46, 204, 113, 180],
     }
     rows: list[dict] = []
-    for feature in _load_geojson_features(OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON):
+    for feature in load_geojson_features(OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON):
         props = feature.get("properties") or {}
         segment_id = props.get("segment_id", "")
         level = str(level_lookup.get(segment_id, "Medium"))
@@ -391,7 +368,7 @@ def okanagan_segment_fwi_path_layer(fwi_df: pd.DataFrame) -> pdk.Layer | None:
 
     fwi_lookup = fwi_df.set_index("segment_id")["fwi_value"].to_dict()
     rows: list[dict] = []
-    for feature in _load_geojson_features(OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON):
+    for feature in load_geojson_features(OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON):
         props = feature.get("properties") or {}
         segment_id = props.get("segment_id", "")
         raw_val = fwi_lookup.get(segment_id)

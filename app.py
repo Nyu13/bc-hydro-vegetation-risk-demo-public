@@ -26,7 +26,6 @@ from src.config import (
     PROCESSED_DATA_DIR,
 )
 from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, fetch_fwi_samples
-from src.okanagan_leaflet_map import MAP_HEIGHT_PX, build_okanagan_leaflet_map_html
 from src.okanagan_map_layers import (
     filter_outages_for_region_map,
     fwi_legend_html,
@@ -34,6 +33,7 @@ from src.okanagan_map_layers import (
     tree_contact_legend_html,
     prepare_okanagan_outage_map_points,
 )
+from src.okanagan_leaflet_map import MAP_HEIGHT_PX, build_okanagan_leaflet_map_html
 from src.okanagan_temporal_map import (
     OKANAGAN_OUTAGE_ARCHIVE_LABEL,
     fetch_fwi_raster_for_date,

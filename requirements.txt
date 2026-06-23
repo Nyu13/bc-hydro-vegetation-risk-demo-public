@@ -1,15 +1,10 @@
+# Streamlit Cloud runtime (pipeline scripts need geopandas/rasterio — install locally as needed)
 pandas
 numpy
 requests
 streamlit
 plotly
-pydeck
-geopandas
-shapely
-pyproj
-rasterio
-rasterstats
-rioxarray
+pydeck>=0.8.0,<0.10
 python-dotenv
 lxml
 tqdm
