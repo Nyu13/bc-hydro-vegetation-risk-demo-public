@@ -12,8 +12,8 @@ from src.area_selection import lookup_municipality_coordinates
 from src.config import (
     BC_TRANSMISSION_BC_GEOJSON,
     BC_TRANSMISSION_LINES_GEOJSON,
-    OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
-    OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
+    OKANAGAN_CORRIDOR_BUFFER_CANDIDATES,
+    OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES,
     OKANAGAN_FWI_CORRIDOR_CSV,
     OKANAGAN_FWI_SAMPLE_CSV,
     OKANAGAN_OUTAGE_DAILY_PROXY_CSV,
@@ -25,15 +25,16 @@ from src.config import (
     PROCESSED_DATA_DIR,
 )
 from src.network_loader import _coords_to_path, _geometry_to_paths
+from src.map_geojson import resolve_geojson_path
 from src.regions import OKANAGAN_AOI_BBOX, OKANAGAN_HISTORY_START_DATE, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON
 
 WORLDCOVER_BUILD_CMD = "python TMP/scripts/build_okanagan_worldcover_stats.py"
 
 OKANAGAN_LAYER_PATHS = {
     "planning": OKANAGAN_PLANNING_DATASET_CSV,
-    "segments": OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
+    "segments": OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES[0],
     "transmission_lines": OKANAGAN_TRANSMISSION_LINES_GEOJSON,
-    "corridor_buffer": OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
+    "corridor_buffer": OKANAGAN_CORRIDOR_BUFFER_CANDIDATES[0],
     "fwi_sample": OKANAGAN_FWI_CORRIDOR_CSV,
     "wildfire_csv": PROCESSED_DATA_DIR / "okanagan_cwfis_wildfire_exposure.csv",
     "weather_csv": PROCESSED_DATA_DIR / "okanagan_weather_stress_stats.csv",
@@ -182,8 +183,8 @@ def load_okanagan_corridor_segment_paths(
     fwi_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Corridor segment LineStrings as pydeck PathLayer rows with fill color."""
-    path = OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON
-    if not path.is_file():
+    path = resolve_geojson_path(OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES)
+    if path is None:
         return pd.DataFrame()
     try:
         with path.open(encoding="utf-8") as fh:
@@ -243,8 +244,8 @@ def load_okanagan_corridor_segment_paths(
 
 
 def load_okanagan_corridor_buffer_geojson() -> dict | None:
-    path = OKANAGAN_CORRIDOR_BUFFER_GEOJSON
-    if not path.is_file():
+    path = resolve_geojson_path(OKANAGAN_CORRIDOR_BUFFER_CANDIDATES)
+    if path is None:
         return None
     try:
         with path.open(encoding="utf-8") as fh:

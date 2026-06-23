@@ -16,7 +16,9 @@ from typing import Any
 import pandas as pd
 
 from src.config import (
+    OKANAGAN_CORRIDOR_BUFFER_CANDIDATES,
     OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
+    OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES,
     OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
 )
 from src.cwfis_fwi import (
@@ -25,7 +27,7 @@ from src.cwfis_fwi import (
     fwi_to_rgba_continuous,
 )
 from src.data_provenance import outage_marker_color
-from src.map_geojson import load_geojson_features, resolve_bc_transmission_geojson
+from src.map_geojson import load_geojson_features, resolve_bc_transmission_geojson, resolve_geojson_path
 from src.regions import OKANAGAN_AOI_BBOX, OKANAGAN_MAP_ZOOM, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON
 
 LEAFLET_VERSION = "1.9.4"
@@ -524,6 +526,14 @@ def build_okanagan_leaflet_map_html(
     transmission_geojson_candidates: tuple[Path, ...] | None = None,
 ) -> str:
     """Build self-contained Leaflet HTML for ``st.iframe``."""
+    if not segments_geojson_path.is_file():
+        segments_geojson_path = (
+            resolve_geojson_path(OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES) or segments_geojson_path
+        )
+    if not buffer_geojson_path.is_file():
+        buffer_geojson_path = (
+            resolve_geojson_path(OKANAGAN_CORRIDOR_BUFFER_CANDIDATES) or buffer_geojson_path
+        )
     min_lon, min_lat, max_lon, max_lat = aoi_bbox
     fwi_bounds = None
     if fwi_bbox:

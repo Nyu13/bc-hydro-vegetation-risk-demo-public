@@ -33,6 +33,7 @@ from src.okanagan_map_layers import (
     tree_contact_legend_html,
     prepare_okanagan_outage_map_points,
 )
+from src.map_geojson import resolve_geojson_path
 from src.okanagan_leaflet_map import MAP_HEIGHT_PX, build_okanagan_leaflet_map_html
 from src.okanagan_temporal_map import (
     OKANAGAN_OUTAGE_ARCHIVE_LABEL,
@@ -381,8 +382,8 @@ def _load_region_fwi_for_map(region_key: str, selected_date_iso: str) -> tuple[p
     region = PLANNING_REGIONS[region_key]
     bundled_path = region.fwi_corridor_csv if region.fwi_corridor_csv.is_file() else region.fwi_sample_csv
     bundled = pd.read_csv(bundled_path) if bundled_path.is_file() else pd.DataFrame()
-    segments_path = region.segments_geojson
-    if segments_path.is_file():
+    segments_path = resolve_geojson_path(region.segments_geojson_candidates)
+    if segments_path and segments_path.is_file():
         try:
             import geopandas as gpd
 
@@ -868,8 +869,10 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
         center_lon=region.pilot_lon,
         zoom=region.map_zoom,
         aoi_bbox=region.aoi_bbox,
-        segments_geojson_path=region.segments_geojson,
-        buffer_geojson_path=region.buffer_geojson,
+        segments_geojson_path=resolve_geojson_path(region.segments_geojson_candidates)
+        or region.segments_geojson_candidates[-1],
+        buffer_geojson_path=resolve_geojson_path(region.buffer_geojson_candidates)
+        or region.buffer_geojson_candidates[-1],
         transmission_geojson_candidates=region.transmission_geojson_candidates,
     )
     st.iframe(map_html, height=MAP_HEIGHT_PX)
@@ -1048,8 +1051,8 @@ def _region_layer_inventory_df(region: PlanningRegionConfig) -> pd.DataFrame:
     artifacts = (
         ("Planning dataset", region.planning_csv),
         ("Stress scenario", region.planning_stress_csv),
-        ("Corridor segments", region.segments_geojson),
-        ("Corridor buffer 200 m", region.buffer_geojson),
+        ("Corridor segments", region.segments_geojson_candidates),
+        ("Corridor buffer 200 m", region.buffer_geojson_candidates),
         ("WorldCover stats", region.worldcover_stats_csv),
         ("Sentinel-2 stats", region.sentinel2_stats_csv),
         ("Sentinel-2 scene QA", region.sentinel2_scene_qa_csv),
@@ -1060,8 +1063,18 @@ def _region_layer_inventory_df(region: PlanningRegionConfig) -> pd.DataFrame:
     if region.causal_ai_discovery_csv:
         artifacts = (*artifacts, ("Causal AI discovery (targets)", region.causal_ai_discovery_csv))
     for label, path in artifacts:
-        status = "loaded" if path.is_file() else f"missing — run `{region.pipeline_build_cmd}`"
-        rows.append({"Layer": label, "Artifact": path.name, "Status": status})
+        if isinstance(path, tuple):
+            resolved = resolve_geojson_path(path)
+            artifact_name = resolved.name if resolved else path[0].name
+            status = (
+                f"loaded ({resolved.name})"
+                if resolved
+                else f"missing — run `{region.pipeline_build_cmd}`"
+            )
+        else:
+            artifact_name = path.name
+            status = "loaded" if path.is_file() else f"missing — run `{region.pipeline_build_cmd}`"
+        rows.append({"Layer": label, "Artifact": artifact_name, "Status": status})
     return pd.DataFrame(rows)
 
 

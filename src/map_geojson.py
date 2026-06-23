@@ -26,6 +26,14 @@ def load_geojson_features(path: Path) -> list[dict]:
     return payload.get("features") or []
 
 
+def resolve_geojson_path(candidates: tuple[Path, ...]) -> Path | None:
+    """Return the first existing GeoJSON path from a candidate list."""
+    for path in candidates:
+        if path.is_file():
+            return path
+    return None
+
+
 def resolve_bc_transmission_geojson() -> Path:
     """Province-wide transmission lines for map context (no region AOI clip)."""
     for path in BC_TRANSMISSION_OVERLAY_CANDIDATES:

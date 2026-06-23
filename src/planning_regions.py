@@ -8,8 +8,8 @@ from pathlib import Path
 from src.config import (
     OKANAGAN_AOI_BBOX,
     OKANAGAN_BC_HYDRO_REGION,
-    OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
-    OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
+    OKANAGAN_CORRIDOR_BUFFER_CANDIDATES,
+    OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES,
     OKANAGAN_FWI_CORRIDOR_CSV,
     OKANAGAN_FWI_SAMPLE_CSV,
     OKANAGAN_HISTORY_START_DATE,
@@ -31,8 +31,8 @@ from src.config import (
     SURREY_CAUSAL_AI_AOI_SCENARIOS_CSV,
     SURREY_CAUSAL_AI_DATASET_DICT_MD,
     SURREY_CAUSAL_AI_DISCOVERY_CSV,
-    SURREY_CORRIDOR_BUFFER_GEOJSON,
-    SURREY_CORRIDOR_SEGMENTS_GEOJSON,
+    SURREY_CORRIDOR_BUFFER_CANDIDATES,
+    SURREY_CORRIDOR_SEGMENTS_CANDIDATES,
     SURREY_FWI_SAMPLE_CSV,
     SURREY_HISTORY_START_DATE,
     SURREY_MAP_ZOOM,
@@ -62,8 +62,8 @@ class PlanningRegionConfig:
     history_start_date: str
     planning_csv: Path
     planning_stress_csv: Path
-    segments_geojson: Path
-    buffer_geojson: Path
+    segments_geojson_candidates: tuple[Path, ...]
+    buffer_geojson_candidates: tuple[Path, ...]
     fwi_corridor_csv: Path
     fwi_sample_csv: Path
     worldcover_stats_csv: Path
@@ -96,8 +96,8 @@ OKANAGAN_REGION = PlanningRegionConfig(
     history_start_date=OKANAGAN_HISTORY_START_DATE,
     planning_csv=OKANAGAN_PLANNING_DATASET_CSV,
     planning_stress_csv=OKANAGAN_PLANNING_STRESS_DATASET_CSV,
-    segments_geojson=OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
-    buffer_geojson=OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
+    segments_geojson_candidates=OKANAGAN_CORRIDOR_SEGMENTS_CANDIDATES,
+    buffer_geojson_candidates=OKANAGAN_CORRIDOR_BUFFER_CANDIDATES,
     fwi_corridor_csv=OKANAGAN_FWI_CORRIDOR_CSV,
     fwi_sample_csv=OKANAGAN_FWI_SAMPLE_CSV,
     worldcover_stats_csv=OKANAGAN_WORLDCOVER_STATS_CSV,
@@ -127,8 +127,8 @@ SURREY_REGION = PlanningRegionConfig(
     history_start_date=SURREY_HISTORY_START_DATE,
     planning_csv=SURREY_PLANNING_DATASET_CSV,
     planning_stress_csv=SURREY_PLANNING_STRESS_DATASET_CSV,
-    segments_geojson=SURREY_CORRIDOR_SEGMENTS_GEOJSON,
-    buffer_geojson=SURREY_CORRIDOR_BUFFER_GEOJSON,
+    segments_geojson_candidates=SURREY_CORRIDOR_SEGMENTS_CANDIDATES,
+    buffer_geojson_candidates=SURREY_CORRIDOR_BUFFER_CANDIDATES,
     fwi_corridor_csv=SURREY_FWI_SAMPLE_CSV,
     fwi_sample_csv=SURREY_FWI_SAMPLE_CSV,
     worldcover_stats_csv=SURREY_WORLDCOVER_STATS_CSV,
