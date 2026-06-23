@@ -416,6 +416,86 @@ def _cached_outages_for_date(selected_date_iso: str) -> tuple[pd.DataFrame, str]
     return load_outages_for_date(selected_date_iso)
 
 
+def _okanagan_tree_contact_priority_section(df: pd.DataFrame) -> None:
+    """Top-priority corridor: tree-contact proxy, problem type, and scenario scores."""
+    required = {
+        "problem_type",
+        "risk_pathway",
+        "recommended_planning_action",
+        "tree_contact_exposure_proxy",
+        "current_priority_score",
+    }
+    if df.empty or not required.issubset(df.columns):
+        return
+
+    top_row = df.sort_values("planning_priority_score", ascending=False).iloc[0]
+    segment_label = str(top_row.get("segment_id", ""))
+    corridor_label = str(top_row.get("corridor_id", ""))
+
+    st.markdown("#### Why this area is prioritized")
+    st.caption(f"Top priority segment: **{segment_label}** (corridor {corridor_label})")
+
+    def _fmt(val) -> str:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return "—"
+        if isinstance(val, (int, float)):
+            return f"{val:.1f}"
+        text = str(val).strip()
+        return text if text else "—"
+
+    info_cols = st.columns(2)
+    info_cols[0].markdown(f"**Problem type:** {_fmt(top_row.get('problem_type'))}")
+    info_cols[0].markdown(f"**Risk pathway:** {_fmt(top_row.get('risk_pathway'))}")
+    info_cols[0].markdown(f"**Recommended action:** {_fmt(top_row.get('recommended_planning_action'))}")
+    info_cols[1].markdown(f"**Tree-contact exposure proxy:** {_fmt(top_row.get('tree_contact_exposure_proxy'))}")
+    info_cols[1].markdown(f"**Data quality:** {_fmt(top_row.get('tree_contact_score_data_quality'))}")
+    missing = top_row.get("tree_contact_missing_components")
+    if missing is not None and str(missing).strip():
+        info_cols[1].markdown(f"**Missing components:** {missing}")
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Current priority", _fmt(top_row.get("current_priority_score")))
+    metric_cols[1].metric("After inspection", _fmt(top_row.get("scenario_after_inspection_score")))
+    metric_cols[2].metric("After trimming", _fmt(top_row.get("scenario_after_trimming_score")))
+    metric_cols[3].metric(
+        "After trimming + inspection",
+        _fmt(top_row.get("scenario_after_trimming_and_inspection_score")),
+    )
+
+    explanation = top_row.get("explanation_short")
+    if explanation is not None and str(explanation).strip():
+        st.markdown(f"_{explanation}_")
+
+    scenario_cols = [
+        "current_priority_score",
+        "scenario_after_inspection_score",
+        "scenario_after_trimming_score",
+        "scenario_after_trimming_and_inspection_score",
+    ]
+    if all(c in df.columns for c in scenario_cols):
+        scenario_df = pd.DataFrame(
+            {
+                "scenario": [
+                    "Current",
+                    "After inspection",
+                    "After trimming",
+                    "After trimming + inspection",
+                ],
+                "priority_score": [float(top_row[c]) for c in scenario_cols],
+            }
+        )
+        fig = px.bar(
+            scenario_df,
+            x="scenario",
+            y="priority_score",
+            title=f"Scenario comparison — {segment_label}",
+            labels={"priority_score": "Priority score", "scenario": ""},
+        )
+        apply_plotly_chart_theme(fig, dark=_chart_dark)
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Scenario only — uses synthetic treatment assumptions.")
+
+
 def _okanagan_planning_tab() -> None:
     st.subheader("Kelowna / Okanagan Vegetation-Wildfire Planning")
     place_count = _okanagan_outage_place_count()
@@ -686,6 +766,10 @@ def _okanagan_planning_tab() -> None:
             "length_km",
             "planning_priority_score",
             "planning_priority_level",
+            "problem_type",
+            "tree_contact_exposure_proxy",
+            "recommended_planning_action",
+            "risk_pathway",
             "sentinel2_ndvi_mean",
             "sentinel2_ndmi_mean",
             "worldcover_tree_pct",
@@ -702,6 +786,8 @@ def _okanagan_planning_tab() -> None:
     ]
     top = df.sort_values("planning_priority_score", ascending=False).head(15)
     st.dataframe(top[display_cols], width="stretch", hide_index=True)
+
+    _okanagan_tree_contact_priority_section(df)
 
     st.markdown("#### Score breakdown (component means)")
     comp_cols = [

@@ -64,6 +64,65 @@ REASON_LABELS = {
     "terrain_score": "Terrain / access proxy",
 }
 
+TREE_CONTACT_WEIGHTS = {
+    "vegetation_exposure_score": 0.30,
+    "vegetation_dryness_score": 0.20,
+    "wind_stress_score": 0.20,
+    "treatment_gap_score": 0.15,
+    "terrain_score": 0.15,
+}
+
+PROBLEM_TYPE_ACTIONS = {
+    "Vegetation exposure + treatment gap": "Vegetation trimming review",
+    "Wildfire / dry vegetation context": "Wildfire readiness review",
+    "Wind + vegetation contact exposure": "Pre-storm vegetation patrol",
+    "Access-constrained wildfire review area": "Access / field inspection planning",
+    "Outage proxy / reliability review area": "Reliability / outage-history review",
+    "General vegetation-weather review": "Monitor / routine review",
+}
+
+RISK_PATHWAY_BY_PROBLEM = {
+    "Vegetation exposure + treatment gap": (
+        "Vegetation cover and synthetic treatment gap suggest corridor clearance review."
+    ),
+    "Wildfire / dry vegetation context": (
+        "Wildfire exposure with dry vegetation context warrants readiness review."
+    ),
+    "Wind + vegetation contact exposure": (
+        "Wind stress combined with dense vegetation increases contact-exposure review priority."
+    ),
+    "Access-constrained wildfire review area": (
+        "Terrain access constraints plus wildfire context favor field inspection planning."
+    ),
+    "Outage proxy / reliability review area": (
+        "Public outage-history proxy flags this segment for reliability review."
+    ),
+    "General vegetation-weather review": (
+        "Composite vegetation and weather proxies suggest routine monitoring."
+    ),
+}
+
+EXPLANATION_BY_PROBLEM = {
+    "Vegetation exposure + treatment gap": (
+        "Dense vegetation + treatment gap placeholder + weather stress increases review priority."
+    ),
+    "Wildfire / dry vegetation context": (
+        "Wildfire context + dry vegetation make this segment suitable for readiness review."
+    ),
+    "Wind + vegetation contact exposure": (
+        "Wind exposure + vegetation cover suggest pre-storm patrol planning — not outage prediction."
+    ),
+    "Access-constrained wildfire review area": (
+        "Wildfire context + dry vegetation + access constraints make this segment suitable for readiness review."
+    ),
+    "Outage proxy / reliability review area": (
+        "Outage-history proxy elevation suggests reliability review — illustrative only."
+    ),
+    "General vegetation-weather review": (
+        "Moderate composite vegetation-weather signals — routine review recommended."
+    ),
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -153,6 +212,84 @@ def _corridor_sentinel2_change_defaults(s2: pd.DataFrame) -> tuple[float | None,
     return ndvi_change, ndmi_change
 
 
+def _planning_score_from_components(components: dict[str, float]) -> float:
+    return round(sum(components[k] * PLANNING_WEIGHTS[k] for k in PLANNING_WEIGHTS), 2)
+
+
+def _wind_stress_from_gust(wind_gust_max_kmh: float | None) -> tuple[float | None, str]:
+    if wind_gust_max_kmh is None or (isinstance(wind_gust_max_kmh, float) and pd.isna(wind_gust_max_kmh)):
+        return None, "missing"
+    return round(min(100.0, float(wind_gust_max_kmh)), 2), "available"
+
+
+def _tree_contact_exposure_proxy(values: dict[str, float | None]) -> tuple[float | None, str, str]:
+    available: dict[str, float] = {}
+    missing: list[str] = []
+    for key, weight in TREE_CONTACT_WEIGHTS.items():
+        val = values.get(key)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            missing.append(key)
+        else:
+            available[key] = float(val)
+    if not available:
+        return None, "unavailable", ",".join(missing)
+    weight_sum = sum(TREE_CONTACT_WEIGHTS[k] for k in available)
+    score = round(sum(available[k] * TREE_CONTACT_WEIGHTS[k] for k in available) / weight_sum, 2)
+    if missing:
+        return score, "partial", ",".join(missing)
+    return score, "complete", ""
+
+
+def _score_available(val) -> bool:
+    return val is not None and not (isinstance(val, float) and pd.isna(val))
+
+
+def _derive_problem_type(row: dict) -> str:
+    veg_exp = row.get("vegetation_exposure_score")
+    tx_gap = row.get("treatment_gap_score")
+    wf = row.get("wildfire_exposure_score")
+    dryness = row.get("vegetation_dryness_score")
+    wind = row.get("wind_stress_score")
+    terrain = row.get("terrain_score")
+    outage = row.get("outage_history_proxy_score")
+
+    if _score_available(veg_exp) and _score_available(tx_gap) and float(veg_exp) >= 65 and float(tx_gap) >= 60:
+        return "Vegetation exposure + treatment gap"
+    if _score_available(wf) and _score_available(dryness) and float(wf) >= 60 and float(dryness) >= 60:
+        return "Wildfire / dry vegetation context"
+    if _score_available(wind) and _score_available(veg_exp) and float(wind) >= 50 and float(veg_exp) >= 65:
+        return "Wind + vegetation contact exposure"
+    if _score_available(terrain) and _score_available(wf) and float(terrain) >= 60 and float(wf) >= 60:
+        return "Access-constrained wildfire review area"
+    if _score_available(outage) and float(outage) >= 60:
+        return "Outage proxy / reliability review area"
+    return "General vegetation-weather review"
+
+
+def _scenario_scores(components: dict[str, float], planning_score: float) -> dict[str, float]:
+    insp = dict(components)
+    insp["treatment_gap_score"] = round(components["treatment_gap_score"] * 0.75, 2)
+
+    trim = dict(components)
+    trim["vegetation_score"] = round(components["vegetation_score"] * 0.80, 2)
+    trim["treatment_gap_score"] = round(components["treatment_gap_score"] * 0.60, 2)
+
+    both = dict(components)
+    both["vegetation_score"] = round(components["vegetation_score"] * 0.75, 2)
+    both["treatment_gap_score"] = round(components["treatment_gap_score"] * 0.40, 2)
+
+    after_insp = _planning_score_from_components(insp)
+    after_trim = _planning_score_from_components(trim)
+    after_both = _planning_score_from_components(both)
+    return {
+        "current_priority_score": planning_score,
+        "scenario_after_inspection_score": after_insp,
+        "scenario_after_trimming_score": after_trim,
+        "scenario_after_trimming_and_inspection_score": after_both,
+        "scenario_priority_reduction": round(planning_score - after_both, 2),
+    }
+
+
 def main() -> int:
     args = parse_args()
     segments = load_okanagan_segments(args.segments).to_crs(4326)
@@ -178,6 +315,10 @@ def main() -> int:
     weather_score, weather_status = score_or_neutral(
         _float(weather.iloc[0].get("eccc_weather_stress_score")) if not weather.empty else None
     )
+    wind_gust_max_kmh = (
+        _float(weather.iloc[0].get("eccc_wind_gust_max_kmh")) if not weather.empty else None
+    )
+    wind_stress_score, wind_data_status = _wind_stress_from_gust(wind_gust_max_kmh)
 
     default_ndvi_change, default_ndmi_change = _corridor_sentinel2_change_defaults(s2)
 
@@ -243,9 +384,19 @@ def main() -> int:
         priority = assign_planning_priority_level(planning_score)
         r1, r2, r3 = top_contributing_reasons(components, weight_map=PLANNING_WEIGHTS, labels=REASON_LABELS)
 
+        tree_contact_vals = {
+            "vegetation_exposure_score": veg_exposure,
+            "vegetation_dryness_score": veg_dryness,
+            "wind_stress_score": wind_stress_score,
+            "treatment_gap_score": tx_score,
+            "terrain_score": terrain_score,
+        }
+        tree_contact_proxy, tree_contact_quality, tree_contact_missing = _tree_contact_exposure_proxy(
+            tree_contact_vals
+        )
+
         centroid = seg.geometry.centroid
-        rows.append(
-            {
+        row = {
                 "corridor_id": seg.get("corridor_id"),
                 "segment_id": seg_id,
                 "region": seg.get("region", OKANAGAN_REGION_NAME),
@@ -271,6 +422,7 @@ def main() -> int:
                 "nearest_fire_km": _float(wf_row.iloc[0]["nearest_fire_km"]) if not wf_row.empty else None,
                 "eccc_weather_stress_score": weather_score,
                 "weather_data_status": weather_status,
+                "wind_gust_max_kmh": wind_gust_max_kmh,
                 "treatment_gap_score": tx_score,
                 "treatment_data_status": tx_status,
                 "outage_history_proxy_score": region_outage_score,
@@ -289,7 +441,18 @@ def main() -> int:
                 ),
                 "as_of_date": today_iso(),
             }
-        )
+        problem_type = _derive_problem_type(row)
+        row["tree_contact_exposure_proxy"] = tree_contact_proxy
+        row["wind_stress_score"] = wind_stress_score
+        row["wind_data_status"] = wind_data_status
+        row["tree_contact_score_data_quality"] = tree_contact_quality
+        row["tree_contact_missing_components"] = tree_contact_missing
+        row["problem_type"] = problem_type
+        row["risk_pathway"] = RISK_PATHWAY_BY_PROBLEM[problem_type]
+        row["recommended_planning_action"] = PROBLEM_TYPE_ACTIONS[problem_type]
+        row["explanation_short"] = EXPLANATION_BY_PROBLEM[problem_type]
+        row.update(_scenario_scores(components, planning_score))
+        rows.append(row)
 
     df = pd.DataFrame(rows)
     write_csv(df, OUTPUT)
