@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 from datetime import date, datetime
 from io import BytesIO
 from typing import Any
@@ -23,6 +24,8 @@ from src.regions import (
     OKANAGAN_AOI_BBOX,
     OKANAGAN_BC_HYDRO_REGION,
     OKANAGAN_HISTORY_START_DATE,
+    OKANAGAN_PILOT_LAT,
+    OKANAGAN_PILOT_LON,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -183,9 +186,19 @@ def load_outages_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]
     return points, status
 
 
-def _fire_tooltip(props: dict[str, Any]) -> str:
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _fire_tooltip(props: dict[str, Any], *, lat: float, lon: float) -> str:
+    fire_id = props.get("agency_fire_id") or props.get("national_fire_id", "")
     lines = [
-        f"Fire: {props.get('agency_fire_id') or props.get('national_fire_id', '')}",
+        f"Fire: {fire_id}",
         f"Source: {CWFIF_FIRE_SOURCE_LABEL}",
     ]
     for label, key in (
@@ -198,6 +211,8 @@ def _fire_tooltip(props: dict[str, Any]) -> str:
         value = props.get(key, "")
         if value is not None and str(value).strip():
             lines.append(f"{label}: {value}")
+    dist_km = _haversine_km(lat, lon, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON)
+    lines.append(f"Distance to Kelowna pilot ({OKANAGAN_PILOT_LAT:.2f}°N): {dist_km:.1f} km")
     return "\n".join(lines)
 
 
@@ -254,7 +269,7 @@ def load_fires_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
                 "fire_size": size,
                 "marker_radius_m": marker_radius,
                 "fire_color": [220, 53, 69, 210],
-                "tooltip_text": _fire_tooltip(props),
+                "tooltip_text": _fire_tooltip(props, lat=lat_f, lon=lon_f),
             }
         )
     if not rows:

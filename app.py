@@ -192,71 +192,6 @@ def _okanagan_vegetation_executive_summary(planning_df: pd.DataFrame) -> None:
     badge_cols[2].caption(f"**Vegetation score:** {_data_status_badge(veg_status, loaded=not planning_df.empty)}")
 
 
-def _okanagan_vegetation_drivers_section(planning_df: pd.DataFrame) -> None:
-    """WorldCover composition, Sentinel-2 stress, and dryness derivation."""
-    st.markdown("#### Vegetation drivers (public satellite proxies)")
-    if planning_df.empty:
-        st.info("Planning dataset empty — run the Okanagan pipeline.")
-        return
-
-    comp_cols = [
-        c
-        for c in (
-            "worldcover_tree_pct",
-            "worldcover_shrub_grass_pct",
-            "worldcover_built_pct",
-            "worldcover_bare_pct",
-        )
-        if c in planning_df.columns
-    ]
-    if comp_cols:
-        means = planning_df[comp_cols].mean().round(1).reset_index()
-        means.columns = ["land_cover_class", "mean_pct"]
-        means["land_cover_class"] = means["land_cover_class"].str.replace("worldcover_", "").str.replace("_pct", "")
-        fig_wc = px.bar(
-            means,
-            x="land_cover_class",
-            y="mean_pct",
-            title="Mean WorldCover composition across corridor segments (%)",
-            labels={"land_cover_class": "Land cover class", "mean_pct": "Mean %"},
-        )
-        apply_plotly_chart_theme(fig_wc, dark=_chart_dark)
-        st.plotly_chart(fig_wc, width="stretch")
-
-    s2_cols = [c for c in ("sentinel2_ndvi_mean", "sentinel2_ndmi_mean") if c in planning_df.columns]
-    if s2_cols:
-        s2_means = planning_df[s2_cols].mean().round(3).reset_index()
-        s2_means.columns = ["index", "mean_value"]
-        s2_means["index"] = s2_means["index"].map(
-            {
-                "sentinel2_ndvi_mean": "NDVI (greenness)",
-                "sentinel2_ndmi_mean": "NDMI (moisture)",
-            }
-        )
-        fig_s2 = px.bar(
-            s2_means,
-            x="index",
-            y="mean_value",
-            title="Mean Sentinel-2 vegetation indices (corridor segments)",
-            labels={"index": "Index", "mean_value": "Mean value"},
-        )
-        apply_plotly_chart_theme(fig_s2, dark=_chart_dark)
-        st.plotly_chart(fig_s2, width="stretch")
-
-    st.caption(
-        "**Dryness score (proxy):** `dryness = clip((0.4 − NDMI) / 0.8 × 100, 0, 100)` — "
-        "lower NDMI (drier canopy) raises the score. "
-        "**Vegetation score** blends exposure (WorldCover tree %), dryness, and NDVI greenness."
-    )
-    if "vegetation_change_score" in planning_df.columns:
-        change_mean = planning_df["vegetation_change_score"].mean()
-        if pd.notna(change_mean):
-            st.caption(
-                f"**Change signal (proxy):** mean vegetation change score {change_mean:.1f}/100 "
-                "from Sentinel-2 NDVI shift (latest vs earliest scene in period)."
-            )
-
-
 def _okanagan_satellite_vegetation_section(planning_df: pd.DataFrame) -> None:
     """Compact Sentinel-2 L2A summary for the planning tab."""
     st.markdown("#### Satellite vegetation (Sentinel-2 L2A)")
@@ -340,6 +275,71 @@ def _okanagan_satellite_vegetation_section(planning_df: pd.DataFrame) -> None:
             st.dataframe(top_ndvi[ndvi_cols], width="stretch", hide_index=True)
         else:
             st.caption("NDVI columns not present in planning dataset.")
+
+
+def _okanagan_vegetation_drivers_section(planning_df: pd.DataFrame) -> None:
+    """WorldCover composition, Sentinel-2 stress, and dryness derivation."""
+    st.markdown("#### Vegetation drivers (public satellite proxies)")
+    if planning_df.empty:
+        st.info("Planning dataset empty — run the Okanagan pipeline.")
+        return
+
+    comp_cols = [
+        c
+        for c in (
+            "worldcover_tree_pct",
+            "worldcover_shrub_grass_pct",
+            "worldcover_built_pct",
+            "worldcover_bare_pct",
+        )
+        if c in planning_df.columns
+    ]
+    if comp_cols:
+        means = planning_df[comp_cols].mean().round(1).reset_index()
+        means.columns = ["land_cover_class", "mean_pct"]
+        means["land_cover_class"] = means["land_cover_class"].str.replace("worldcover_", "").str.replace("_pct", "")
+        fig_wc = px.bar(
+            means,
+            x="land_cover_class",
+            y="mean_pct",
+            title="Mean WorldCover composition across corridor segments (%)",
+            labels={"land_cover_class": "Land cover class", "mean_pct": "Mean %"},
+        )
+        apply_plotly_chart_theme(fig_wc, dark=_chart_dark)
+        st.plotly_chart(fig_wc, width="stretch")
+
+    s2_cols = [c for c in ("sentinel2_ndvi_mean", "sentinel2_ndmi_mean") if c in planning_df.columns]
+    if s2_cols:
+        s2_means = planning_df[s2_cols].mean().round(3).reset_index()
+        s2_means.columns = ["index", "mean_value"]
+        s2_means["index"] = s2_means["index"].map(
+            {
+                "sentinel2_ndvi_mean": "NDVI (greenness)",
+                "sentinel2_ndmi_mean": "NDMI (moisture)",
+            }
+        )
+        fig_s2 = px.bar(
+            s2_means,
+            x="index",
+            y="mean_value",
+            title="Mean Sentinel-2 vegetation indices (corridor segments)",
+            labels={"index": "Index", "mean_value": "Mean value"},
+        )
+        apply_plotly_chart_theme(fig_s2, dark=_chart_dark)
+        st.plotly_chart(fig_s2, width="stretch")
+
+    st.caption(
+        "**Dryness score (proxy):** `dryness = clip((0.4 − NDMI) / 0.8 × 100, 0, 100)` — "
+        "lower NDMI (drier canopy) raises the score. "
+        "**Vegetation score** blends exposure (WorldCover tree %), dryness, and NDVI greenness."
+    )
+    if "vegetation_change_score" in planning_df.columns:
+        change_mean = planning_df["vegetation_change_score"].mean()
+        if pd.notna(change_mean):
+            st.caption(
+                f"**Change signal (proxy):** mean vegetation change score {change_mean:.1f}/100 "
+                "from Sentinel-2 NDVI shift (latest vs earliest scene in period)."
+            )
 
 
 def _okanagan_outage_place_count() -> int | None:
@@ -702,6 +702,11 @@ def _okanagan_planning_tab() -> None:
             st.caption("CWFIF fire layer unavailable — check network access.")
         elif fires_status in {"no_fires", "no_fires_in_aoi"}:
             st.caption(f"No BC wildland fires in the Okanagan AOI on {selected_date_iso}.")
+    elif show_fires and not fires_df.empty:
+        st.caption(
+            f"Showing **{len(fires_df)}** BC wildland fire(s) active on **{selected_date_iso}** "
+            "(red circles — click for details)."
+        )
     if show_archive_outages and archive_outage_points.empty:
         if archive_outage_status == "archive_missing":
             st.caption(

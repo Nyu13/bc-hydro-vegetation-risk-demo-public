@@ -43,10 +43,30 @@ def _geojson_file_payload(path: Path) -> dict[str, Any] | None:
     return {"type": "FeatureCollection", "features": features}
 
 
-def _rgba_to_css(color: list[int]) -> str:
-    r, g, b, a = color[:4]
+def _rgba_to_css(color: list[int] | tuple[int, ...]) -> str:
+    r, g, b, a = list(color)[:4]
     alpha = a / 255.0 if a > 1 else float(a)
     return f"rgba({r},{g},{b},{alpha:.3f})"
+
+
+def _color_value(raw: Any, *, default: list[int]) -> str:
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return _rgba_to_css(default)
+    if isinstance(raw, (list, tuple)):
+        return _rgba_to_css(raw)
+    if hasattr(raw, "__iter__") and not isinstance(raw, (str, bytes)):
+        return _rgba_to_css(list(raw))
+    return _rgba_to_css(default)
+
+
+def _text_to_popup_html(text: str) -> str:
+    if not text or (isinstance(text, float) and pd.isna(text)):
+        return ""
+    lines = [line.strip() for line in str(text).split("\n") if line.strip()]
+    if not lines:
+        return ""
+    body = "<br/>".join(lines)
+    return f'<div class="point-popup">{body}</div>'
 
 
 def _fmt_num(value: Any, *, digits: int = 1, suffix: str = "") -> str:
@@ -127,17 +147,12 @@ def _segment_popup_html(
     if reason_2 and not pd.isna(reason_2):
         planning_lines.append(f"Also: {reason_2}")
 
-    satellite_lines = [
-        f"NDVI mean: {_fmt_num(row.get('sentinel2_ndvi_mean'), digits=3)}",
-        f"NDMI mean: {_fmt_num(row.get('sentinel2_ndmi_mean'), digits=3)}",
-        f"Cloud-filtered pixels: {_fmt_num(row.get('cloud_filtered_pct'), digits=1, suffix='%')}",
-        f"Status: {row.get('vegetation_data_status', 'n/a')}",
-        "Source: open/free Sentinel-2 L2A processed locally",
-    ]
-
     vegetation_lines = [
         f"WorldCover tree cover: {_fmt_num(row.get('worldcover_tree_pct'), digits=1, suffix='%')}",
         f"WorldCover built-up: {_fmt_num(row.get('worldcover_built_pct'), digits=1, suffix='%')}",
+        f"Sentinel-2 NDVI mean: {_fmt_num(row.get('sentinel2_ndvi_mean'), digits=3)}",
+        f"Sentinel-2 NDMI mean: {_fmt_num(row.get('sentinel2_ndmi_mean'), digits=3)}",
+        f"Cloud-filtered pixels: {_fmt_num(row.get('cloud_filtered_pct'), digits=1, suffix='%')}",
         f"Vegetation dryness score: {_fmt_score(row.get('vegetation_dryness_score'))} "
         "<em>(proxy from NDMI)</em>",
         f"Vegetation score: {_fmt_score(row.get('vegetation_score'))}",
@@ -163,8 +178,7 @@ def _segment_popup_html(
     sections = "".join(
         [
             section("Planning priority — segment color mode", planning_lines),
-            section("Satellite (Sentinel-2 L2A)", satellite_lines),
-            section("Vegetation", vegetation_lines),
+            section("Vegetation & satellite", vegetation_lines),
             section("Wildfire", wildfire_lines),
             section("Weather", weather_lines),
             section("Outage history", outage_lines),
@@ -309,31 +323,37 @@ def _point_markers(
     radius: int = 7,
     tooltip_col: str | None = None,
     color_col: str | None = None,
+    radius_m_col: str | None = None,
 ) -> list[dict[str, Any]]:
     if df.empty or lat_col not in df.columns or lon_col not in df.columns:
         return []
-    default_css = _rgba_to_css(color) if isinstance(color, list) else str(color)
+    default_color = color if isinstance(color, list) else [231, 76, 60, 220]
+    default_css = _rgba_to_css(default_color) if isinstance(color, list) else str(color)
     markers: list[dict[str, Any]] = []
     for _, row in df.iterrows():
         lat = row.get(lat_col)
         lon = row.get(lon_col)
         if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
             continue
-        if color_col and color_col in df.columns and row.get(color_col) is not None:
-            raw = row[color_col]
-            css_color = _rgba_to_css(raw) if isinstance(raw, list) else default_css
-        else:
-            css_color = default_css
+        css_color = _color_value(row.get(color_col) if color_col else None, default=default_color)
         tooltip = row.get(tooltip_col, "") if tooltip_col else ""
-        markers.append(
-            {
-                "lat": float(lat),
-                "lon": float(lon),
-                "color": css_color,
-                "radius": radius,
-                "tooltip": str(tooltip) if tooltip and not pd.isna(tooltip) else "",
-            }
-        )
+        tooltip_text = str(tooltip) if tooltip and not pd.isna(tooltip) else ""
+        marker: dict[str, Any] = {
+            "lat": float(lat),
+            "lon": float(lon),
+            "color": css_color,
+            "radius": radius,
+            "tooltip": tooltip_text,
+            "popup": _text_to_popup_html(tooltip_text),
+        }
+        if radius_m_col and radius_m_col in df.columns:
+            raw_radius_m = row.get(radius_m_col)
+            if raw_radius_m is not None and not pd.isna(raw_radius_m):
+                try:
+                    marker["radiusM"] = float(raw_radius_m)
+                except (TypeError, ValueError):
+                    pass
+        markers.append(marker)
     return markers
 
 
@@ -403,14 +423,17 @@ def build_okanagan_leaflet_map_html(
         lon_col="fire_lon",
         color=[231, 76, 60, 220],
         color_col="fire_color",
-        radius=8,
+        radius=10,
+        tooltip_col="tooltip_text",
+        radius_m_col="marker_radius_m",
     )
     payload["archiveOutageMarkers"] = _point_markers(
         archive_outages_df,
         lat_col="out_lat",
         lon_col="out_lon",
         color=[155, 89, 182, 220],
-        radius=7,
+        radius=8,
+        tooltip_col="tooltip_text",
     )
     live_color = outage_marker_color(live_outages_synthetic)
     payload["liveOutageMarkers"] = _point_markers(
@@ -432,7 +455,24 @@ def build_okanagan_leaflet_map_html(
   <style>
     html, body, #map {{ height: 100%; margin: 0; padding: 0; }}
     .leaflet-tooltip {{ white-space: pre-line; font-size: 12px; }}
-    .seg-popup {{ font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.35; max-width: 340px; }}
+    .leaflet-tooltip.wide-tooltip,
+    .leaflet-popup-content .point-popup {{
+      min-width: 260px;
+      max-width: 340px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: anywhere;
+    }}
+    .leaflet-popup-content-wrapper {{
+      border-radius: 6px;
+    }}
+    .leaflet-popup-content {{
+      margin: 10px 14px;
+      min-width: 240px;
+    }}
+    .seg-popup {{ font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.35; max-width: 340px; min-width: 240px; }}
     .seg-popup ul {{ margin: 4px 0 8px 0; padding-left: 18px; }}
     .seg-section {{ margin-top: 6px; }}
     .seg-notes {{ margin-top: 8px; font-size: 11px; color: #555; border-top: 1px solid #ddd; padding-top: 6px; }}
@@ -488,15 +528,35 @@ def build_okanagan_leaflet_map_html(
 
     function addMarkers(markers) {{
       markers.forEach(function(m) {{
-        const circle = L.circleMarker([m.lat, m.lon], {{
-          radius: m.radius || 7,
-          color: m.color,
-          fillColor: m.color,
-          fillOpacity: 0.85,
-          weight: 1
-        }});
-        if (m.tooltip) circle.bindTooltip(m.tooltip);
-        circle.addTo(map);
+        let layer;
+        if (m.radiusM) {{
+          layer = L.circle([m.lat, m.lon], {{
+            radius: m.radiusM,
+            color: m.color,
+            fillColor: m.color,
+            fillOpacity: 0.28,
+            weight: 2,
+            opacity: 0.9
+          }});
+        }} else {{
+          layer = L.circleMarker([m.lat, m.lon], {{
+            radius: m.radius || 7,
+            color: m.color,
+            fillColor: m.color,
+            fillOpacity: 0.85,
+            weight: 1
+          }});
+        }}
+        if (m.popup) {{
+          layer.bindPopup(m.popup, {{ maxWidth: 340, minWidth: 260, className: 'wide-popup' }});
+        }}
+        if (m.tooltip) {{
+          layer.bindTooltip(m.tooltip, {{ sticky: true, opacity: 0.95, className: 'wide-tooltip' }});
+        }}
+        layer.addTo(map);
+        if (m.radiusM) {{
+          layer.bringToFront();
+        }}
       }});
     }}
 
