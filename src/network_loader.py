@@ -8,12 +8,14 @@ import pandas as pd
 
 from src.config import (
     BC_TRANSMISSION_BC_GEOJSON,
+    BC_TRANSMISSION_BUNDLED_GEOJSON,
     BC_TRANSMISSION_GEOJSON,
     BC_TRANSMISSION_KML,
     BC_TRANSMISSION_LINES_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84,
     BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
+    BC_TRANSMISSION_OVERLAY_CANDIDATES,
     DEMO_DATA_DIR,
     DEMO_PILOT_MUNICIPALITY,
     DEMO_PILOT_TRANSMISSION_BBOX,
@@ -57,19 +59,12 @@ def load_all_demo_corridors() -> pd.DataFrame:
 
 def resolve_bc_transmission_geojson() -> Path | None:
     """
-    Prefer local WFS exports (data/processed/) when present; else bundled Lower Mainland;
-    else small demo sample for offline/legacy deploys.
+    Prefer local WFS exports (data/processed/) when present; else bundled province-wide;
+    else bundled Lower Mainland; else small demo sample for offline/legacy deploys.
     """
-    if BC_TRANSMISSION_LINES_GEOJSON.exists():
-        return BC_TRANSMISSION_LINES_GEOJSON
-    if BC_TRANSMISSION_BC_GEOJSON.exists():
-        return BC_TRANSMISSION_BC_GEOJSON
-    if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():
-        return BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON
-    if BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON.exists():
-        return BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON
-    if BC_TRANSMISSION_GEOJSON.exists():
-        return BC_TRANSMISSION_GEOJSON
+    for path in BC_TRANSMISSION_OVERLAY_CANDIDATES:
+        if path.is_file():
+            return path
     return None
 
 
@@ -80,6 +75,8 @@ def bc_transmission_geojson_source() -> str:
         return "unavailable"
     if path == BC_TRANSMISSION_BC_GEOJSON:
         return "processed BC-wide WFS export"
+    if path == BC_TRANSMISSION_BUNDLED_GEOJSON:
+        return "bundled BC-wide WFS export"
     if path == BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON:
         return "processed Lower Mainland WFS export"
     if path == BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON:
