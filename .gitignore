@@ -54,6 +54,7 @@ data/processed/*
 !data/processed/okanagan_fwi_corridor_sample.csv
 !data/processed/okanagan_sentinel2_scene_qa.csv
 !data/processed/okanagan_sentinel2_corridor_stats.csv
+!data/processed/okanagan_worldcover_corridor_stats.csv
 
 # Optional full GPKG/ZIP copies (use bundled data/demo/*.geojson sample instead)
 data/lignes-transport-electrique-2020.gpkg

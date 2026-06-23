@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import base64
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -25,6 +26,7 @@ from src.config import (
     OKANAGAN_FWI_SAMPLE_CSV,
     OKANAGAN_PLANNING_DATASET_CSV,
     OKANAGAN_PLANNING_DISCLAIMER,
+    OKANAGAN_WORLDCOVER_STATS_CSV,
     PROCESSED_DATA_DIR,
 )
 from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, fetch_fwi_samples
@@ -45,6 +47,7 @@ from src.okanagan_temporal_map import (
 )
 from src.okanagan_planning_loader import (
     OKANAGAN_LAYER_PATHS,
+    WORLDCOVER_BUILD_CMD,
     load_okanagan_fwi_sample,
     load_okanagan_planning_dataset,
     load_okanagan_sentinel2_corridor_stats,
@@ -125,7 +128,7 @@ def _okanagan_vegetation_executive_summary(planning_df: pd.DataFrame) -> None:
     st.markdown("#### Vegetation & satellite context")
     st.caption(BC_HYDRO_VEG_STORY_CAPTION)
 
-    wc_path = PROCESSED_DATA_DIR / "okanagan_worldcover_corridor_stats.csv"
+    wc_path = OKANAGAN_WORLDCOVER_STATS_CSV
     s2_path = PROCESSED_DATA_DIR / "okanagan_sentinel2_corridor_stats.csv"
     wc_loaded = wc_path.is_file()
     s2_loaded = s2_path.is_file()
@@ -181,7 +184,10 @@ def _okanagan_vegetation_executive_summary(planning_df: pd.DataFrame) -> None:
             pass
 
     badge_cols = st.columns(3)
-    badge_cols[0].caption(f"**WorldCover:** {_data_status_badge(wc_status, loaded=wc_loaded)}")
+    wc_badge = _data_status_badge(wc_status, loaded=wc_loaded)
+    if not wc_loaded:
+        wc_badge = f"{wc_badge} — run: `{WORLDCOVER_BUILD_CMD}`"
+    badge_cols[0].caption(f"**WorldCover:** {wc_badge}")
     badge_cols[1].caption(f"**Sentinel-2:** {_data_status_badge(s2_status, loaded=s2_loaded)}")
     badge_cols[2].caption(f"**Vegetation score:** {_data_status_badge(veg_status, loaded=not planning_df.empty)}")
 
@@ -746,6 +752,14 @@ def _render_okanagan_overview() -> None:
     )
 
 
+def _okanagan_artifact_status(label: str, path: Path) -> str:
+    if path.name == OKANAGAN_WORLDCOVER_STATS_CSV.name:
+        if path.is_file():
+            return "loaded"
+        return f"missing — run: {WORLDCOVER_BUILD_CMD}"
+    return "loaded" if path.is_file() else "missing — run pipeline"
+
+
 def _okanagan_layer_inventory_df() -> pd.DataFrame:
     rows: list[dict[str, str]] = []
     for layer_key, path in OKANAGAN_LAYER_PATHS.items():
@@ -753,11 +767,11 @@ def _okanagan_layer_inventory_df() -> pd.DataFrame:
             {
                 "Layer": layer_key.replace("_", " ").title(),
                 "Artifact": path.name,
-                "Status": "loaded" if path.is_file() else "missing — run pipeline",
+                "Status": _okanagan_artifact_status(layer_key.replace("_", " ").title(), path),
             }
         )
     for label, path in (
-        ("WorldCover stats", PROCESSED_DATA_DIR / "okanagan_worldcover_corridor_stats.csv"),
+        ("WorldCover stats", OKANAGAN_WORLDCOVER_STATS_CSV),
         ("Sentinel-2 stats", PROCESSED_DATA_DIR / "okanagan_sentinel2_corridor_stats.csv"),
         ("Corridor buffer 200 m", PROCESSED_DATA_DIR / "okanagan_corridor_buffer_200m.geojson"),
         ("CWFIS FWI sample", OKANAGAN_FWI_SAMPLE_CSV),
@@ -772,7 +786,7 @@ def _okanagan_layer_inventory_df() -> pd.DataFrame:
             {
                 "Layer": label,
                 "Artifact": path.name,
-                "Status": "loaded" if path.is_file() else "missing — run pipeline",
+                "Status": _okanagan_artifact_status(label, path),
             }
         )
     return pd.DataFrame(rows)

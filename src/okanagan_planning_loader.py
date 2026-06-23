@@ -20,11 +20,14 @@ from src.config import (
     OKANAGAN_PLANNING_DATASET_CSV,
     OKANAGAN_SENTINEL2_CORRIDOR_STATS_CSV,
     OKANAGAN_SENTINEL2_SCENE_QA_CSV,
+    OKANAGAN_WORLDCOVER_STATS_CSV,
     OKANAGAN_TRANSMISSION_LINES_GEOJSON,
     PROCESSED_DATA_DIR,
 )
 from src.network_loader import _coords_to_path, _geometry_to_paths
 from src.regions import OKANAGAN_AOI_BBOX, OKANAGAN_HISTORY_START_DATE, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON
+
+WORLDCOVER_BUILD_CMD = "python TMP/scripts/build_okanagan_worldcover_stats.py"
 
 OKANAGAN_LAYER_PATHS = {
     "planning": OKANAGAN_PLANNING_DATASET_CSV,
@@ -39,6 +42,7 @@ OKANAGAN_LAYER_PATHS = {
     "transmission_qa": PROCESSED_DATA_DIR / "okanagan_transmission_qa_summary.csv",
     "sentinel2_corridor": OKANAGAN_SENTINEL2_CORRIDOR_STATS_CSV,
     "sentinel2_scene_qa": OKANAGAN_SENTINEL2_SCENE_QA_CSV,
+    "worldcover_corridor": OKANAGAN_WORLDCOVER_STATS_CSV,
 }
 
 # Approximate centroids for Okanagan/Kootenay municipalities (archive proxy map markers).
@@ -401,7 +405,7 @@ def okanagan_data_source_status() -> pd.DataFrame:
             "layer": "Vegetation cover (WorldCover)",
             "current_source": "ESA WorldCover 2021 (open)",
             "bc_hydro_replacement": "Planet / internal vegetation inventory",
-            "demo_status": _file_status(PROCESSED_DATA_DIR / "okanagan_worldcover_corridor_stats.csv"),
+            "demo_status": _worldcover_layer_status(),
         },
         {
             "layer": "Vegetation moisture (Sentinel-2 NDMI)",
@@ -460,6 +464,24 @@ def _fwi_layer_status() -> str:
             status = df["data_status"].iloc[0] if "data_status" in df.columns else "loaded"
             return f"loaded ({status})"
         return "loaded (no valid FWI samples)"
+    except Exception:  # noqa: BLE001
+        return _file_status(path)
+
+
+def _worldcover_layer_status() -> str:
+    path = OKANAGAN_WORLDCOVER_STATS_CSV
+    if not path.is_file():
+        return f"missing — run: {WORLDCOVER_BUILD_CMD}"
+    try:
+        df = pd.read_csv(path, usecols=["data_status", "worldcover_tree_pct"], nrows=5)
+        if df.empty:
+            return "empty"
+        status = str(df["data_status"].iloc[0]) if "data_status" in df.columns else "loaded"
+        if status == "open_free_processed" and df["worldcover_tree_pct"].notna().any():
+            return "loaded (ESA WorldCover 2021)"
+        if status.startswith("stub"):
+            return f"missing raster — run: {WORLDCOVER_BUILD_CMD} ({status})"
+        return f"loaded ({status})"
     except Exception:  # noqa: BLE001
         return _file_status(path)
 

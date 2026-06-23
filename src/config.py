@@ -159,6 +159,7 @@ OKANAGAN_OUTAGE_DAILY_PROXY_CSV = PROCESSED_DATA_DIR / "okanagan_outage_daily_pr
 OKANAGAN_TRANSMISSION_QA_CSV = PROCESSED_DATA_DIR / "okanagan_transmission_qa_summary.csv"
 OKANAGAN_SENTINEL2_CORRIDOR_STATS_CSV = PROCESSED_DATA_DIR / "okanagan_sentinel2_corridor_stats.csv"
 OKANAGAN_SENTINEL2_SCENE_QA_CSV = PROCESSED_DATA_DIR / "okanagan_sentinel2_scene_qa.csv"
+OKANAGAN_WORLDCOVER_STATS_CSV = PROCESSED_DATA_DIR / "okanagan_worldcover_corridor_stats.csv"
 
 OKANAGAN_PLANNING_DISCLAIMER = (
     "Kelowna / Okanagan proof-of-process: public and proxy layers show where vegetation, wildfire, "
