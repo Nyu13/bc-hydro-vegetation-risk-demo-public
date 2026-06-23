@@ -19,7 +19,6 @@ def _apply_streamlit_secrets_to_env() -> None:
 
 _apply_streamlit_secrets_to_env()
 
-from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, fetch_fwi_samples
 from src.config import (
     DEMO_OFFLINE_MODE,
     DEMO_PRIMARY_DISCLAIMER,
@@ -28,6 +27,7 @@ from src.config import (
     OKANAGAN_PLANNING_DISCLAIMER,
     PROCESSED_DATA_DIR,
 )
+from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, fetch_fwi_samples
 from src.okanagan_leaflet_map import MAP_HEIGHT_PX, build_okanagan_leaflet_map_html
 from src.okanagan_map_layers import (
     filter_outages_for_okanagan_map,

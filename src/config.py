@@ -4,23 +4,44 @@ from pathlib import Path
 import os
 import sys
 
-from src.regions import (
-    OKANAGAN_HISTORY_START_DATE,
-    OKANAGAN_REGION_NAME,
-    SURREY_AOI_BBOX,
-    SURREY_BC_HYDRO_REGION,
-    SURREY_MAP_ZOOM,
-    SURREY_PILOT_LAT,
-    SURREY_PILOT_LON,
-    SURREY_REGION_NAME,
-)
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 DEMO_DATA_DIR = DATA_DIR / "demo"
 DOCS_DIR = PROJECT_ROOT / "docs"
+
+# --- Demo region constants (also re-exported from src.regions for modular imports) ---
+SURREY_REGION_NAME = "Surrey"
+SURREY_BC_HYDRO_REGION = "Lower Mainland"
+SURREY_AOI_BBOX = (-123.05, 49.02, -122.65, 49.35)  # min_lon, min_lat, max_lon, max_lat
+SURREY_AOI_WKT = (
+    "POLYGON((-123.05 49.02, -122.65 49.02, -122.65 49.35, -123.05 49.35, -123.05 49.02))"
+)
+SURREY_PILOT_LAT = 49.19
+SURREY_PILOT_LON = -122.85
+SURREY_MAP_ZOOM = 10.5
+
+OKANAGAN_REGION_NAME = "Kelowna / Okanagan"
+OKANAGAN_AOI_BBOX = (-120.20, 49.50, -118.80, 50.50)  # min_lon, min_lat, max_lon, max_lat
+OKANAGAN_AOI_WKT = (
+    "POLYGON((-120.20 49.50, -118.80 49.50, -118.80 50.50, -120.20 50.50, -120.20 49.50))"
+)
+OKANAGAN_PILOT_LAT = 49.888
+OKANAGAN_PILOT_LON = -119.496
+OKANAGAN_MAP_ZOOM = 9.0
+OKANAGAN_MUNICIPALITIES = (
+    "Kelowna",
+    "West Kelowna",
+    "Lake Country",
+    "Peachland",
+    "Vernon",
+    "Regional District of Central Okanagan",
+)
+OKANAGAN_BC_HYDRO_REGION = "Okanagan/Kootenay"
+OKANAGAN_CORRIDOR_BUFFER_M = 200
+OKANAGAN_SEGMENT_LENGTH_KM = 5.0
+OKANAGAN_HISTORY_START_DATE = "2026-01-01"
 
 # BC Geographic Warehouse transmission lines (optional local KML/WFS; bundled sample for Cloud)
 BC_TRANSMISSION_KML = DATA_DIR / "WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml"
