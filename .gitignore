@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,7 +15,7 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
-# Data artifacts — large / local only
+# Data artifacts â€” large / local only
 data/raw/
 data/external/
 *.SAFE/
@@ -45,6 +45,12 @@ data/processed/*
 !data/processed/causal_ai_surrey_discovery_raw.csv
 !data/processed/causal_ai_surrey_discovery_with_targets.csv
 !data/processed/okanagan_vegetation_wildfire_planning_dataset.csv
+!data/processed/okanagan_vegetation_wildfire_planning_dataset_stress_scenario.csv
+!data/processed/okanagan_discovery_raw.csv
+!data/processed/okanagan_discovery_with_targets.csv
+!data/processed/okanagan_discovery_export_qa.csv
+!data/processed/surrey_vegetation_wildfire_planning_dataset.csv
+!data/processed/surrey_vegetation_wildfire_planning_dataset_stress_scenario.csv
 !data/processed/okanagan_transmission_qa_summary.csv
 !data/processed/okanagan_weather_stress_stats.csv
 !data/processed/okanagan_weather_stress_daily.csv

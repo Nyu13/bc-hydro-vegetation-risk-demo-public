@@ -53,8 +53,16 @@ BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON = (
     PROCESSED_DATA_DIR / "bc_transmission_lines_lower_mainland.geojson"
 )
 BC_TRANSMISSION_BC_GEOJSON = PROCESSED_DATA_DIR / "bc_transmission_lines_bc.geojson"
-# Province-wide HV lines for Okanagan map context (no AOI clip)
+# Province-wide HV lines for planning map context (no AOI clip)
 BC_TRANSMISSION_LINES_GEOJSON = PROCESSED_DATA_DIR / "bc_transmission_lines.geojson"
+# Same overlay priority for every planning region (Surrey, Okanagan, etc.)
+BC_TRANSMISSION_OVERLAY_CANDIDATES: tuple[Path, ...] = (
+    BC_TRANSMISSION_LINES_GEOJSON,
+    BC_TRANSMISSION_BC_GEOJSON,
+    BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
+    BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON,
+    BC_TRANSMISSION_GEOJSON,
+)
 BC_TRANSMISSION_WFS_URL = "https://openmaps.gov.bc.ca/geo/pub/wfs"
 BC_TRANSMISSION_WFS_LAYER = "pub:WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP"
 # WFS bbox filters must use EPSG:3005; this WGS84 box matches the demo / export scripts
@@ -141,12 +149,47 @@ PLANET_SURREY_SAMPLE_CSV = DEMO_DATA_DIR / "planet_surrey_sample_placeholder.csv
 SURREY_WORLDCOVER_STATS_CSV = PROCESSED_DATA_DIR / "surrey_worldcover_corridor_stats.csv"
 SURREY_FREE_DATA_SUMMARY_CSV = PROCESSED_DATA_DIR / "surrey_free_data_corridor_summary.csv"
 SURREY_FREE_DATA_PLACEHOLDER_CSV = DEMO_DATA_DIR / "surrey_free_data_corridor_summary_placeholder.csv"
-SURREY_SENTINEL2_STATS_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_corridor_stats.csv"
+SURREY_SENTINEL2_CORRIDOR_STATS_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_corridor_stats.csv"
+SURREY_SENTINEL2_STATS_CSV = SURREY_SENTINEL2_CORRIDOR_STATS_CSV
 SURREY_SENTINEL2_SCENE_QA_CSV = PROCESSED_DATA_DIR / "surrey_sentinel2_scene_qa.csv"
 SURREY_ECCC_WEATHER_STRESS_CSV = PROCESSED_DATA_DIR / "surrey_eccc_weather_stress_stats.csv"
+SURREY_HISTORY_START_DATE = "2026-01-01"
+SURREY_CORRIDOR_BUFFER_M = 200
+SURREY_SEGMENT_LENGTH_KM = 5.0
+SURREY_MUNICIPALITIES = (
+    "Surrey",
+    "White Rock",
+    "Langley",
+    "Delta",
+    "New Westminster",
+    "Burnaby",
+    "Richmond",
+    "Coquitlam",
+    "Maple Ridge",
+    "Abbotsford",
+)
+SURREY_PLANNING_DATASET_CSV = PROCESSED_DATA_DIR / "surrey_vegetation_wildfire_planning_dataset.csv"
+SURREY_PLANNING_STRESS_DATASET_CSV = (
+    PROCESSED_DATA_DIR / "surrey_vegetation_wildfire_planning_dataset_stress_scenario.csv"
+)
+SURREY_CORRIDOR_SEGMENTS_GEOJSON = PROCESSED_DATA_DIR / "surrey_corridor_segments.geojson"
+SURREY_CORRIDOR_BUFFER_GEOJSON = PROCESSED_DATA_DIR / "surrey_corridor_buffer_200m.geojson"
+SURREY_TRANSMISSION_LINES_GEOJSON = PROCESSED_DATA_DIR / "surrey_transmission_lines.geojson"
+SURREY_FWI_SAMPLE_CSV = PROCESSED_DATA_DIR / "surrey_fwi_sample.csv"
+SURREY_PLANNING_DISCLAIMER = (
+    "Surrey / Lower Mainland proof-of-process: public and proxy layers show where vegetation, wildfire, "
+    "weather stress, outage history, and treatment gaps overlap. Causal AI exploration datasets from "
+    "Fujitsu Research are linked for research context — not operational scores."
+)
+SURREY_CAUSAL_AI_AOI_SCENARIOS_CSV = PROCESSED_DATA_DIR / "causal_ai_surrey_aoi_scenarios.csv"
+SURREY_CAUSAL_AI_DISCOVERY_CSV = PROCESSED_DATA_DIR / "causal_ai_surrey_discovery_with_targets.csv"
+SURREY_CAUSAL_AI_DATASET_DICT_MD = DOCS_DIR / "causal_ai_surrey_dataset_dictionary.md"
 
 # Kelowna / Okanagan planning demo outputs (see TMP/scripts/build_okanagan_demo_pipeline.py)
 OKANAGAN_PLANNING_DATASET_CSV = PROCESSED_DATA_DIR / "okanagan_vegetation_wildfire_planning_dataset.csv"
+OKANAGAN_PLANNING_STRESS_DATASET_CSV = (
+    PROCESSED_DATA_DIR / "okanagan_vegetation_wildfire_planning_dataset_stress_scenario.csv"
+)
 OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON = PROCESSED_DATA_DIR / "okanagan_corridor_segments.geojson"
 OKANAGAN_TRANSMISSION_LINES_GEOJSON = PROCESSED_DATA_DIR / "okanagan_transmission_lines.geojson"
 OKANAGAN_CORRIDOR_BUFFER_GEOJSON = PROCESSED_DATA_DIR / "okanagan_corridor_buffer_200m.geojson"

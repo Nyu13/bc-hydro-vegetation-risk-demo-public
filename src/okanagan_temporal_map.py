@@ -6,13 +6,14 @@ import base64
 import json
 import logging
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from io import BytesIO
 from typing import Any
 from urllib.parse import urlencode
 
 import pandas as pd
 from pydeck.types import String
+from requests.exceptions import HTTPError, RequestException
 
 from src.cwfis_fwi import (
     CWFIS_FWI_SOURCE_LABEL,
@@ -38,17 +39,74 @@ OKANAGAN_OUTAGE_ARCHIVE_LABEL = (
 CWFIF_FIRE_SOURCE_LABEL = "CWFIF WFS public:cwfif_national_activefires (BC, date-filtered)"
 
 
-def okanagan_map_date_bounds() -> tuple[date, date, date]:
-    """Return (min_date, max_date, default_date) for the 2026 temporal map picker."""
-    min_date = datetime.strptime(OKANAGAN_HISTORY_START_DATE, "%Y-%m-%d").date()
+def _coord_in_bbox(
+    lat: float,
+    lon: float,
+    aoi_bbox: tuple[float, float, float, float] = OKANAGAN_AOI_BBOX,
+) -> bool:
+    min_lon, min_lat, max_lon, max_lat = aoi_bbox
+    return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
+
+
+def _coord_in_okanagan_bbox(lat: float, lon: float) -> bool:
+    return _coord_in_bbox(lat, lon, OKANAGAN_AOI_BBOX)
+
+
+def _filter_region_history(
+    history: pd.DataFrame,
+    *,
+    bc_hydro_region: str = OKANAGAN_BC_HYDRO_REGION,
+    municipalities: tuple[str, ...] = (),
+) -> pd.DataFrame:
+    region_col = "region_name" if "region_name" in history.columns else "region"
+    if region_col not in history.columns:
+        return pd.DataFrame()
+    target_region = bc_hydro_region.casefold()
+    work = history.loc[history[region_col].astype(str).str.casefold() == target_region].copy()
+    if municipalities and "municipality" in work.columns:
+        work["municipality"] = work["municipality"].astype(str).str.strip()
+        place_set = {p.casefold() for p in municipalities}
+        work = work.loc[
+            work["municipality"].str.casefold().apply(
+                lambda m: m in place_set or any(p in m for p in place_set)
+            )
+        ]
+    elif "municipality" in work.columns:
+        work["municipality"] = work["municipality"].astype(str).str.strip()
+        work = work.loc[work["municipality"].str.len() > 0]
+    return work
+
+
+def _filter_okanagan_history(history: pd.DataFrame) -> pd.DataFrame:
+    from src.regions import OKANAGAN_MUNICIPALITIES
+
+    return _filter_region_history(
+        history,
+        bc_hydro_region=OKANAGAN_BC_HYDRO_REGION,
+        municipalities=OKANAGAN_MUNICIPALITIES,
+    )
+
+
+def map_date_bounds(
+    *,
+    history_start_date: str = OKANAGAN_HISTORY_START_DATE,
+    bc_hydro_region: str = OKANAGAN_BC_HYDRO_REGION,
+    municipalities: tuple[str, ...] = (),
+) -> tuple[date, date, date]:
+    """Return (min_date, max_date, default_date) for the temporal map picker."""
+    min_date = datetime.strptime(history_start_date, "%Y-%m-%d").date()
     today = date.today()
     cap = min(today, date(2026, 12, 31))
     max_date = cap
     history = _load_history_parquet()
     if history is not None and not history.empty:
-        ok = _filter_okanagan_history(history)
-        if not ok.empty and "snapshot_date" in ok.columns:
-            parsed = pd.to_datetime(ok["snapshot_date"], errors="coerce").dropna()
+        region_history = _filter_region_history(
+            history,
+            bc_hydro_region=bc_hydro_region,
+            municipalities=municipalities,
+        )
+        if not region_history.empty and "snapshot_date" in region_history.columns:
+            parsed = pd.to_datetime(region_history["snapshot_date"], errors="coerce").dropna()
             if not parsed.empty:
                 archive_max = parsed.max().date()
                 max_date = min(cap, archive_max)
@@ -58,15 +116,15 @@ def okanagan_map_date_bounds() -> tuple[date, date, date]:
     return min_date, max_date, default_date
 
 
-def _filter_okanagan_history(history: pd.DataFrame) -> pd.DataFrame:
-    region_col = "region_name" if "region_name" in history.columns else "region"
-    if region_col not in history.columns:
-        return pd.DataFrame()
-    work = history.loc[history[region_col].astype(str) == OKANAGAN_BC_HYDRO_REGION].copy()
-    if "municipality" not in work.columns:
-        return pd.DataFrame()
-    work["municipality"] = work["municipality"].astype(str).str.strip()
-    return work.loc[work["municipality"].str.len() > 0]
+def okanagan_map_date_bounds() -> tuple[date, date, date]:
+    """Return (min_date, max_date, default_date) for the 2026 temporal map picker."""
+    from src.regions import OKANAGAN_MUNICIPALITIES
+
+    return map_date_bounds(
+        history_start_date=OKANAGAN_HISTORY_START_DATE,
+        bc_hydro_region=OKANAGAN_BC_HYDRO_REGION,
+        municipalities=OKANAGAN_MUNICIPALITIES,
+    )
 
 
 def _parse_outage_timestamp(value: object) -> pd.Timestamp | None:
@@ -122,11 +180,6 @@ def _outage_rows_for_scene_date(history_df: pd.DataFrame, scene_date: str) -> tu
     return pd.DataFrame(), f"snapshot_nearest_no_active:{snap_date}"
 
 
-def _coord_in_okanagan_bbox(lat: float, lon: float) -> bool:
-    min_lon, min_lat, max_lon, max_lat = OKANAGAN_AOI_BBOX
-    return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
-
-
 def _outage_archive_tooltip(row: pd.Series, *, match_status: str) -> str:
     lines = [
         f"Outage: {row.get('outage_id', '')}",
@@ -147,18 +200,28 @@ def _outage_archive_tooltip(row: pd.Series, *, match_status: str) -> str:
     return "\n".join(lines)
 
 
-def load_outages_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
-    """Point outages from unofficial archive for Okanagan/Kootenay on selected date."""
+def load_outages_for_date(
+    selected_date: date | str,
+    *,
+    aoi_bbox: tuple[float, float, float, float] = OKANAGAN_AOI_BBOX,
+    bc_hydro_region: str = OKANAGAN_BC_HYDRO_REGION,
+    municipalities: tuple[str, ...] = (),
+) -> tuple[pd.DataFrame, str]:
+    """Point outages from unofficial archive for a BC Hydro region on selected date."""
     history = _load_history_parquet()
     if history is None or history.empty:
         return pd.DataFrame(), "archive_missing"
 
-    ok = _filter_okanagan_history(history)
-    if ok.empty:
-        return pd.DataFrame(), "archive_no_okanagan_rows"
+    region_rows = _filter_region_history(
+        history,
+        bc_hydro_region=bc_hydro_region,
+        municipalities=municipalities,
+    )
+    if region_rows.empty:
+        return pd.DataFrame(), "archive_no_region_rows"
 
     scene_date = selected_date.isoformat() if isinstance(selected_date, date) else str(selected_date)[:10]
-    rows, status = _outage_rows_for_scene_date(ok, scene_date)
+    rows, status = _outage_rows_for_scene_date(region_rows, scene_date)
     if rows.empty:
         return pd.DataFrame(), status
 
@@ -169,7 +232,7 @@ def load_outages_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]
     if points.empty:
         return pd.DataFrame(), f"{status}_no_coordinates"
 
-    min_lon, min_lat, max_lon, max_lat = OKANAGAN_AOI_BBOX
+    min_lon, min_lat, max_lon, max_lat = aoi_bbox
     points = points.loc[
         (points["out_lat"] >= min_lat)
         & (points["out_lat"] <= max_lat)
@@ -195,7 +258,15 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def _fire_tooltip(props: dict[str, Any], *, lat: float, lon: float) -> str:
+def _fire_tooltip(
+    props: dict[str, Any],
+    *,
+    lat: float,
+    lon: float,
+    pilot_lat: float = OKANAGAN_PILOT_LAT,
+    pilot_lon: float = OKANAGAN_PILOT_LON,
+    pilot_label: str = "Kelowna pilot",
+) -> str:
     fire_id = props.get("agency_fire_id") or props.get("national_fire_id", "")
     lines = [
         f"Fire: {fire_id}",
@@ -211,16 +282,35 @@ def _fire_tooltip(props: dict[str, Any], *, lat: float, lon: float) -> str:
         value = props.get(key, "")
         if value is not None and str(value).strip():
             lines.append(f"{label}: {value}")
-    dist_km = _haversine_km(lat, lon, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON)
-    lines.append(f"Distance to Kelowna pilot ({OKANAGAN_PILOT_LAT:.2f}°N): {dist_km:.1f} km")
+    dist_km = _haversine_km(lat, lon, pilot_lat, pilot_lon)
+    lines.append(f"Distance to {pilot_label} ({pilot_lat:.2f}°N): {dist_km:.1f} km")
     return "\n".join(lines)
 
 
-def load_fires_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
-    """BC wildland fires active on selected date from CWFIF WFS."""
-    scene_date = selected_date.isoformat() if isinstance(selected_date, date) else str(selected_date)[:10]
-    ts = f"{scene_date}T12:00:00Z"
-    cql = f"agency_code='BC' AND '{ts}'>=record_start AND '{ts}'<=record_end"
+def _parse_cwfif_datetime(value: Any) -> datetime | None:
+    if value is None or str(value).strip() == "":
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _fire_active_on_date(props: dict[str, Any], scene_dt: datetime) -> bool:
+    start = _parse_cwfif_datetime(props.get("record_start"))
+    if start is None:
+        return False
+    end = _parse_cwfif_datetime(props.get("record_end"))
+    if end is None:
+        return scene_dt >= start
+    return start <= scene_dt <= end
+
+
+def _cwfif_wfs_url(cql: str, *, count: int = 500) -> str:
     params = urlencode(
         {
             "service": "WFS",
@@ -229,18 +319,59 @@ def load_fires_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
             "typeName": CWFIF_ACTIVE_LAYER,
             "outputFormat": "application/json",
             "CQL_FILTER": cql,
-            "count": "500",
+            "count": str(count),
         }
     )
-    url = f"{CWFIF_WFS}?{params}"
+    return f"{CWFIF_WFS}?{params}"
+
+
+def _fetch_cwfif_features(cql: str, *, count: int = 500) -> list[dict[str, Any]]:
+    url = _cwfif_wfs_url(cql, count=count)
+    content, _ = _public_http_get(url)
+    payload = json.loads(content.decode("utf-8"))
+    return payload.get("features") or []
+
+
+def _load_cwfif_features_for_date(scene_date: str) -> list[dict[str, Any]]:
+    """Fetch BC fires active on scene_date, with server CQL then client-side fallback."""
+    ts = f"{scene_date}T12:00:00Z"
+    scene_dt = datetime.fromisoformat(f"{scene_date}T12:00:00+00:00")
+    date_cql_variants = (
+        f"agency_code='BC' AND record_start<='{ts}' AND record_end>='{ts}'",
+        f"agency_code='BC' AND '{ts}'>=record_start AND '{ts}'<=record_end",
+    )
+
+    for cql in date_cql_variants:
+        try:
+            return _fetch_cwfif_features(cql)
+        except (HTTPError, RequestException, json.JSONDecodeError, ValueError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            LOGGER.debug("CWFIF date-filtered fetch failed (%s): %s", status, exc)
+
+    LOGGER.info("CWFIF date CQL failed; falling back to BC-only fetch with client-side date filter")
+    features = _fetch_cwfif_features("agency_code='BC'")
+    return [
+        feat
+        for feat in features
+        if _fire_active_on_date(feat.get("properties") or {}, scene_dt)
+    ]
+
+
+def load_fires_for_date(
+    selected_date: date | str,
+    *,
+    aoi_bbox: tuple[float, float, float, float] = OKANAGAN_AOI_BBOX,
+    pilot_lat: float = OKANAGAN_PILOT_LAT,
+    pilot_lon: float = OKANAGAN_PILOT_LON,
+    pilot_label: str = "Kelowna pilot",
+) -> tuple[pd.DataFrame, str]:
+    """BC wildland fires active on selected date from CWFIF WFS."""
+    scene_date = selected_date.isoformat() if isinstance(selected_date, date) else str(selected_date)[:10]
     try:
-        content, _ = _public_http_get(url)
-        payload = json.loads(content.decode("utf-8"))
+        features = _load_cwfif_features_for_date(scene_date)
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("CWFIF fire fetch failed: %s", exc)
         return pd.DataFrame(), "fetch_failed"
-
-    features = payload.get("features") or []
     if not features:
         return pd.DataFrame(), "no_fires"
 
@@ -255,7 +386,7 @@ def load_fires_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
             lat_f, lon_f = float(lat), float(lon)
         except (TypeError, ValueError):
             continue
-        if not _coord_in_okanagan_bbox(lat_f, lon_f):
+        if not _coord_in_bbox(lat_f, lon_f, aoi_bbox):
             continue
         size = props.get("fire_size")
         try:
@@ -269,7 +400,14 @@ def load_fires_for_date(selected_date: date | str) -> tuple[pd.DataFrame, str]:
                 "fire_size": size,
                 "marker_radius_m": marker_radius,
                 "fire_color": [220, 53, 69, 210],
-                "tooltip_text": _fire_tooltip(props, lat=lat_f, lon=lon_f),
+                "tooltip_text": _fire_tooltip(
+                    props,
+                    lat=lat_f,
+                    lon=lon_f,
+                    pilot_lat=pilot_lat,
+                    pilot_lon=pilot_lon,
+                    pilot_label=pilot_label,
+                ),
             }
         )
     if not rows:

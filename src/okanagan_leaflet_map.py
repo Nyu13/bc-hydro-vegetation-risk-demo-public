@@ -32,8 +32,11 @@ from src.okanagan_map_layers import (
 from src.regions import OKANAGAN_AOI_BBOX, OKANAGAN_MAP_ZOOM, OKANAGAN_PILOT_LAT, OKANAGAN_PILOT_LON
 
 LEAFLET_VERSION = "1.9.4"
-MAP_HEIGHT_PX = 520
+MAP_HEIGHT_PX = 720
 CARTO_POSITRON_TILE = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+_SEGMENT_POPUP_FOOTER_HTML = (
+    "<div class='seg-footer'><em>Planning indicator only — not an outage prediction.</em></div>"
+)
 
 
 def _geojson_file_payload(path: Path) -> dict[str, Any] | None:
@@ -82,10 +85,90 @@ def _fmt_score(value: Any) -> str:
     return _fmt_num(value, digits=1)
 
 
+_SCORE_RGB_STOPS: tuple[tuple[float, tuple[int, int, int]], ...] = (
+    (0.0, (46, 204, 113)),
+    (50.0, (241, 196, 15)),
+    (100.0, (192, 57, 43)),
+)
+
+
+def _score_to_rgba_continuous(value: float | None, *, alpha: int = 210) -> list[int]:
+    """Smooth green→yellow→red ramp for 0–100 planning-style scores."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return [180, 180, 180, 120]
+    try:
+        v = max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return [180, 180, 180, 120]
+    stops = _SCORE_RGB_STOPS
+    if v >= stops[-1][0]:
+        r, g, b = stops[-1][1]
+        return [r, g, b, alpha]
+    for i in range(len(stops) - 1):
+        v0, c0 = stops[i]
+        v1, c1 = stops[i + 1]
+        if v0 <= v <= v1:
+            span = v1 - v0
+            t = (v - v0) / span if span > 0 else 0.0
+            rgb = [int(c0[j] + t * (c1[j] - c0[j])) for j in range(3)]
+            return [*rgb, alpha]
+    r, g, b = stops[0][1]
+    return [r, g, b, alpha]
+
+
 def _segment_row_lookup(planning_df: pd.DataFrame) -> dict[str, pd.Series]:
     if planning_df.empty or "segment_id" not in planning_df.columns:
         return {}
     return {str(k): v for k, v in planning_df.set_index("segment_id", drop=False).iterrows()}
+
+
+def _segment_story_html(row: pd.Series) -> str:
+    """Problem story block — leads segment popups for presentation demos."""
+    problem = row.get("problem_type", "")
+    action = row.get("recommended_planning_action", "")
+    why = row.get("explanation_short", "")
+    tree_contact = row.get("tree_contact_exposure_proxy")
+
+    lines: list[str] = []
+    if problem and not pd.isna(problem):
+        lines.append(f"Problem type: <strong>{problem}</strong>")
+    if action and not pd.isna(action):
+        lines.append(f"Suggested planning action: <strong>{action}</strong>")
+    if why and not pd.isna(why):
+        lines.append(f"Why: {why}")
+    if tree_contact is not None and not (isinstance(tree_contact, float) and pd.isna(tree_contact)):
+        lines.append(
+            f"Tree contact / fall-in review proxy: <strong>{_fmt_score(tree_contact)}</strong>"
+        )
+    if not lines:
+        return ""
+    items = "".join(f"<li>{line}</li>" for line in lines)
+    return f"<div class='seg-section seg-story'><ul>{items}</ul></div>"
+
+
+def _segment_scenario_html(row: pd.Series) -> str:
+    """Synthetic treatment scenario scores for popup storytelling."""
+    scenario_cols = [
+        ("Current priority", "current_priority_score"),
+        ("After inspection", "scenario_after_inspection_score"),
+        ("After trimming", "scenario_after_trimming_score"),
+        ("After trimming + inspection", "scenario_after_trimming_and_inspection_score"),
+    ]
+    lines: list[str] = []
+    for label, col in scenario_cols:
+        if col not in row.index:
+            return ""
+        val = row.get(col)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return ""
+        lines.append(f"{label}: <strong>{_fmt_score(val)}</strong>")
+    if not lines:
+        return ""
+    items = "".join(f"<li>{line}</li>" for line in lines)
+    return (
+        f"<div class='seg-section'><strong>Scenario only — synthetic treatment assumptions.</strong>"
+        f"<ul>{items}</ul></div>"
+    )
 
 
 def _segment_popup_html(
@@ -120,6 +203,9 @@ def _segment_popup_html(
         f"Corridor: {corridor_id or 'n/a'} &nbsp;|&nbsp; Length: {_fmt_num(length_km, digits=2)} km"
     )
 
+    story_html = _segment_story_html(row)
+    scenario_html = _segment_scenario_html(row)
+
     if color_mode == "fwi":
         fwi_lines = [
             f"CWFIS FWI ({selected_date_iso or 'selected date'}): "
@@ -131,21 +217,37 @@ def _segment_popup_html(
         ]
         if reason_1 and not pd.isna(reason_1):
             planning_lines.append(f"Top planning reason: {reason_1}")
-        sections = "".join(
+        reference = "".join(
             [
-                section("Fire Weather Index — segment color mode", fwi_lines),
+                section("Fire Weather Index — segment color mode (reference)", fwi_lines),
                 section("Planning priority (composite, static)", planning_lines),
             ]
         )
-        return f"<div class='seg-popup'>{header}{sections}</div>"
+        return (
+            f"<div class='seg-popup'>{header}{story_html}{scenario_html}{reference}"
+            f"{_SEGMENT_POPUP_FOOTER_HTML}</div>"
+        )
 
-    planning_lines = [
-        f"Priority: <strong>{priority_level}</strong> (score {_fmt_score(priority_score)})",
-    ]
-    if reason_1 and not pd.isna(reason_1):
-        planning_lines.append(f"Top reason: {reason_1}")
-    if reason_2 and not pd.isna(reason_2):
-        planning_lines.append(f"Also: {reason_2}")
+    if color_mode == "tree_contact_exposure_proxy":
+        tree_val = row.get("tree_contact_exposure_proxy")
+        color_lines = [
+            f"Tree contact / fall-in review proxy: <strong>{_fmt_score(tree_val)}</strong>",
+        ]
+        quality = row.get("tree_contact_score_data_quality", "")
+        if quality and not pd.isna(quality):
+            color_lines.append(f"Data quality: {quality}")
+        reference = section(
+            "Tree contact / fall-in review proxy — segment color mode (reference)", color_lines
+        )
+    else:
+        planning_lines = [
+            f"Priority: <strong>{priority_level}</strong> (score {_fmt_score(priority_score)})",
+        ]
+        if reason_1 and not pd.isna(reason_1):
+            planning_lines.append(f"Top reason: {reason_1}")
+        if reason_2 and not pd.isna(reason_2):
+            planning_lines.append(f"Also: {reason_2}")
+        reference = section("Planning priority — segment color mode (reference)", planning_lines)
 
     vegetation_lines = [
         f"WorldCover tree cover: {_fmt_num(row.get('worldcover_tree_pct'), digits=1, suffix='%')}",
@@ -175,9 +277,9 @@ def _segment_popup_html(
     if notes and not pd.isna(notes):
         notes_html = f"<div class='seg-notes'><em>{notes}</em></div>"
 
-    sections = "".join(
+    detail_sections = "".join(
         [
-            section("Planning priority — segment color mode", planning_lines),
+            reference,
             section("Vegetation & satellite", vegetation_lines),
             section("Wildfire", wildfire_lines),
             section("Weather", weather_lines),
@@ -185,7 +287,10 @@ def _segment_popup_html(
             section("Treatment gap", treatment_lines),
         ]
     )
-    return f"<div class='seg-popup'>{header}{sections}{notes_html}</div>"
+    return (
+        f"<div class='seg-popup'>{header}{story_html}{scenario_html}{detail_sections}{notes_html}"
+        f"{_SEGMENT_POPUP_FOOTER_HTML}</div>"
+    )
 
 
 def _segment_tooltip_short(
@@ -212,6 +317,15 @@ def _segment_tooltip_short(
             parts.append(f"Planning ref.: {level} ({_fmt_score(score)})")
         return "<br>".join(parts)
 
+    if color_mode == "tree_contact_exposure_proxy":
+        proxy = row.get("tree_contact_exposure_proxy")
+        if proxy is not None and not pd.isna(proxy):
+            parts.append(f"Tree contact / fall-in review proxy: {_fmt_score(proxy)}")
+        problem = row.get("problem_type")
+        if problem and not pd.isna(problem):
+            parts.append(str(problem))
+        return "<br>".join(parts)
+
     level = row.get("planning_priority_level")
     score = row.get("planning_priority_score")
     if level and not pd.isna(level):
@@ -228,6 +342,8 @@ def _segment_geojson(
     fwi_df: pd.DataFrame | None = None,
     color_mode: str = "planning_priority_score",
     selected_date_iso: str = "",
+    focus_segment_id: str | None = None,
+    segments_geojson_path: Path = OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
 ) -> dict[str, Any] | None:
     row_lookup = _segment_row_lookup(planning_df)
     fwi_lookup: dict[str, float] = {}
@@ -249,7 +365,7 @@ def _segment_geojson(
     )
 
     features: list[dict[str, Any]] = []
-    for feature in _load_geojson_features(OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON):
+    for feature in _load_geojson_features(segments_geojson_path):
         props = feature.get("properties") or {}
         segment_id = str(props.get("segment_id", ""))
         row = row_lookup.get(segment_id)
@@ -257,6 +373,13 @@ def _segment_geojson(
 
         if color_mode == "fwi":
             color = fwi_to_rgba_continuous(fwi_val)
+        elif color_mode == "tree_contact_exposure_proxy":
+            proxy_val = None
+            if row is not None:
+                raw = row.get("tree_contact_exposure_proxy")
+                if raw is not None and not (isinstance(raw, float) and pd.isna(raw)):
+                    proxy_val = float(raw)
+            color = _score_to_rgba_continuous(proxy_val)
         else:
             level = str(level_lookup.get(segment_id, "Medium"))
             color = level_colors.get(level, [150, 150, 150, 180])
@@ -264,6 +387,7 @@ def _segment_geojson(
         geom = feature.get("geometry")
         if not geom:
             continue
+        focused = bool(focus_segment_id and segment_id == focus_segment_id)
         features.append(
             {
                 "type": "Feature",
@@ -271,7 +395,8 @@ def _segment_geojson(
                 "properties": {
                     "segment_id": segment_id,
                     "stroke": _rgba_to_css(color),
-                    "weight": 6,
+                    "weight": 10 if focused else 6,
+                    "focused": focused,
                     "tooltip": _segment_tooltip_short(
                         row,
                         color_mode=color_mode,
@@ -292,11 +417,19 @@ def _segment_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
-def _segment_priority_geojson(planning_df: pd.DataFrame, *, selected_date_iso: str = "") -> dict[str, Any] | None:
+def _segment_priority_geojson(
+    planning_df: pd.DataFrame,
+    *,
+    selected_date_iso: str = "",
+    focus_segment_id: str | None = None,
+    segments_geojson_path: Path = OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
+) -> dict[str, Any] | None:
     return _segment_geojson(
         planning_df,
         color_mode="planning_priority_score",
         selected_date_iso=selected_date_iso,
+        focus_segment_id=focus_segment_id,
+        segments_geojson_path=segments_geojson_path,
     )
 
 
@@ -305,12 +438,16 @@ def _segment_fwi_geojson(
     planning_df: pd.DataFrame,
     *,
     selected_date_iso: str = "",
+    focus_segment_id: str | None = None,
+    segments_geojson_path: Path = OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
 ) -> dict[str, Any] | None:
     return _segment_geojson(
         planning_df,
         fwi_df=fwi_df,
         color_mode="fwi",
         selected_date_iso=selected_date_iso,
+        focus_segment_id=focus_segment_id,
+        segments_geojson_path=segments_geojson_path,
     )
 
 
@@ -357,6 +494,13 @@ def _point_markers(
     return markers
 
 
+def _resolve_transmission_geojson(candidates: tuple[Path, ...] | None = None) -> Path:
+    for path in candidates or ():
+        if path.is_file():
+            return path
+    return _resolve_bc_transmission_geojson()
+
+
 def build_okanagan_leaflet_map_html(
     *,
     selected_date_iso: str,
@@ -376,17 +520,33 @@ def build_okanagan_leaflet_map_html(
     center_lat: float = OKANAGAN_PILOT_LAT,
     center_lon: float = OKANAGAN_PILOT_LON,
     zoom: int = OKANAGAN_MAP_ZOOM,
+    focus_segment_id: str | None = None,
+    aoi_bbox: tuple[float, float, float, float] = OKANAGAN_AOI_BBOX,
+    segments_geojson_path: Path = OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
+    buffer_geojson_path: Path = OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
+    transmission_geojson_candidates: tuple[Path, ...] | None = None,
 ) -> str:
     """Build self-contained Leaflet HTML for ``st.iframe``."""
-    min_lon, min_lat, max_lon, max_lat = OKANAGAN_AOI_BBOX
+    min_lon, min_lat, max_lon, max_lat = aoi_bbox
     fwi_bounds = None
     if fwi_bbox:
         fwi_min_lon, fwi_min_lat, fwi_max_lon, fwi_max_lat = fwi_bbox
         fwi_bounds = [[fwi_min_lat, fwi_min_lon], [fwi_max_lat, fwi_max_lon]]
+    focus_center: list[float] | None = None
+    if focus_segment_id:
+        row = _segment_row_lookup(planning_df).get(str(focus_segment_id))
+        if row is not None:
+            lat = row.get("centroid_lat")
+            lon = row.get("centroid_lon")
+            if lat is not None and lon is not None and not pd.isna(lat) and not pd.isna(lon):
+                focus_center = [float(lat), float(lon)]
     payload: dict[str, Any] = {
         "center": [center_lat, center_lon],
         "zoom": zoom,
         "aoiBounds": [[min_lat, min_lon], [max_lat, max_lon]],
+        "focusSegmentId": focus_segment_id if focus_center else None,
+        "focusCenter": focus_center,
+        "focusZoom": 13,
         "selectedDate": selected_date_iso,
         "showFwiRaster": show_fwi_raster and bool(fwi_png_base64 and fwi_bounds),
         "fwiImageUrl": f"data:image/png;base64,{fwi_png_base64}" if fwi_png_base64 else None,
@@ -403,18 +563,33 @@ def build_okanagan_leaflet_map_html(
     }
 
     if show_tx_lines:
-        tx_path = _resolve_bc_transmission_geojson()
+        tx_path = _resolve_transmission_geojson(transmission_geojson_candidates)
         payload["transmissionGeoJson"] = _geojson_file_payload(tx_path)
     if show_buffer:
-        payload["bufferGeoJson"] = _geojson_file_payload(OKANAGAN_CORRIDOR_BUFFER_GEOJSON)
+        payload["bufferGeoJson"] = _geojson_file_payload(buffer_geojson_path)
     if show_segments:
         if segment_color_mode == "fwi":
             payload["segmentsGeoJson"] = _segment_fwi_geojson(
-                fwi_df, planning_df, selected_date_iso=selected_date_iso
+                fwi_df,
+                planning_df,
+                selected_date_iso=selected_date_iso,
+                focus_segment_id=focus_segment_id,
+                segments_geojson_path=segments_geojson_path,
+            )
+        elif segment_color_mode == "tree_contact_exposure_proxy":
+            payload["segmentsGeoJson"] = _segment_geojson(
+                planning_df,
+                color_mode="tree_contact_exposure_proxy",
+                selected_date_iso=selected_date_iso,
+                focus_segment_id=focus_segment_id,
+                segments_geojson_path=segments_geojson_path,
             )
         else:
             payload["segmentsGeoJson"] = _segment_priority_geojson(
-                planning_df, selected_date_iso=selected_date_iso
+                planning_df,
+                selected_date_iso=selected_date_iso,
+                focus_segment_id=focus_segment_id,
+                segments_geojson_path=segments_geojson_path,
             )
 
     payload["fireMarkers"] = _point_markers(
@@ -483,7 +658,11 @@ def build_okanagan_leaflet_map_html(
     .seg-popup {{ font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.35; max-width: 340px; min-width: 240px; }}
     .seg-popup ul {{ margin: 4px 0 8px 0; padding-left: 18px; }}
     .seg-section {{ margin-top: 6px; }}
+    .seg-story {{ margin-top: 4px; }}
+    .seg-story ul {{ list-style: none; padding-left: 0; margin: 6px 0; }}
+    .seg-story li {{ margin-bottom: 4px; }}
     .seg-notes {{ margin-top: 8px; font-size: 11px; color: #555; border-top: 1px solid #ddd; padding-top: 6px; }}
+    .seg-footer {{ margin-top: 8px; font-size: 10px; color: #777; border-top: 1px solid #eee; padding-top: 4px; }}
   </style>
 </head>
 <body>
@@ -517,10 +696,16 @@ def build_okanagan_leaflet_map_html(
     }}
 
     if (cfg.segmentsGeoJson) {{
+      let focusLayer = null;
       L.geoJSON(cfg.segmentsGeoJson, {{
         style: function(feature) {{
           const p = feature.properties || {{}};
-          return {{ color: p.stroke || '#e74c3c', weight: p.weight || 5, opacity: 0.9 }};
+          const focused = cfg.focusSegmentId && p.segment_id === cfg.focusSegmentId;
+          return {{
+            color: focused ? '#111111' : (p.stroke || '#e74c3c'),
+            weight: focused ? 10 : (p.weight || 5),
+            opacity: focused ? 1.0 : 0.9
+          }};
         }},
         onEachFeature: function(feature, layer) {{
           const p = feature.properties || {{}};
@@ -530,8 +715,14 @@ def build_okanagan_leaflet_map_html(
           if (p.popup) {{
             layer.bindPopup(p.popup, {{ maxWidth: 360, minWidth: 240 }});
           }}
+          if (cfg.focusSegmentId && p.segment_id === cfg.focusSegmentId) {{
+            focusLayer = layer;
+          }}
         }}
       }}).addTo(map);
+      if (focusLayer) {{
+        focusLayer.bringToFront();
+      }}
     }}
 
     function addMarkers(markers) {{
@@ -573,7 +764,9 @@ def build_okanagan_leaflet_map_html(
     addMarkers(cfg.archiveOutageMarkers);
     addMarkers(cfg.liveOutageMarkers);
 
-    if (cfg.aoiBounds) {{
+    if (cfg.focusCenter && cfg.focusZoom) {{
+      map.flyTo(cfg.focusCenter, cfg.focusZoom);
+    }} else if (cfg.aoiBounds) {{
       map.fitBounds(cfg.aoiBounds, {{ padding: [12, 12] }});
     }}
   </script>

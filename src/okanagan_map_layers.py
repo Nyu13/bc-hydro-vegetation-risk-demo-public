@@ -11,11 +11,10 @@ import pandas as pd
 import pydeck as pdk
 
 from src.config import (
-    BC_TRANSMISSION_BC_GEOJSON,
     BC_TRANSMISSION_LINES_GEOJSON,
+    BC_TRANSMISSION_OVERLAY_CANDIDATES,
     OKANAGAN_CORRIDOR_BUFFER_GEOJSON,
     OKANAGAN_CORRIDOR_SEGMENTS_GEOJSON,
-    OKANAGAN_TRANSMISSION_LINES_GEOJSON,
 )
 from src.cwfis_fwi import CWFIS_FWI_SOURCE_LABEL, FWI_LEGEND_STOPS, fwi_to_rgba
 from src.okanagan_temporal_map import fwi_png_to_pydeck_image
@@ -84,12 +83,8 @@ def _load_geojson_features(path: Path) -> list[dict]:
 
 
 def _resolve_bc_transmission_geojson() -> Path:
-    """Province-wide transmission lines for map context; Okanagan clip as fallback."""
-    for path in (
-        BC_TRANSMISSION_LINES_GEOJSON,
-        BC_TRANSMISSION_BC_GEOJSON,
-        OKANAGAN_TRANSMISSION_LINES_GEOJSON,
-    ):
+    """Province-wide transmission lines for map context (no region AOI clip)."""
+    for path in BC_TRANSMISSION_OVERLAY_CANDIDATES:
         if path.is_file():
             return path
     return BC_TRANSMISSION_LINES_GEOJSON
@@ -213,30 +208,56 @@ def _okanagan_place_match(row: pd.Series) -> bool:
     return any(municipality == place.casefold() or place.casefold() in municipality for place in OKANAGAN_MUNICIPALITIES)
 
 
-def filter_outages_for_okanagan_map(outage_df: pd.DataFrame) -> pd.DataFrame:
-    """Keep live JSON rows whose coordinates or labels fall in the Okanagan AOI."""
+def filter_outages_for_region_map(
+    outage_df: pd.DataFrame,
+    *,
+    aoi_bbox: tuple[float, float, float, float] = OKANAGAN_AOI_BBOX,
+    bc_hydro_region: str = OKANAGAN_BC_HYDRO_REGION,
+    municipalities: tuple[str, ...] = OKANAGAN_MUNICIPALITIES,
+) -> pd.DataFrame:
+    """Keep live JSON rows whose coordinates or labels fall in a demo region AOI."""
     if outage_df.empty:
         return outage_df
     frame = _normalize_outage_coords(outage_df)
+    target_region = bc_hydro_region.casefold()
+    place_set = {p.casefold() for p in municipalities}
     keep_idx: list[Any] = []
     for idx, row in frame.iterrows():
         lat = row.get("out_lat")
         lon = row.get("out_lon")
         if pd.notna(lat) and pd.notna(lon):
             try:
-                if _coord_in_okanagan_bbox(float(lat), float(lon)):
+                min_lon, min_lat, max_lon, max_lat = aoi_bbox
+                if min_lat <= float(lat) <= max_lat and min_lon <= float(lon) <= max_lon:
                     keep_idx.append(idx)
                     continue
             except (TypeError, ValueError):
                 pass
         if "outage_geojson" in frame.columns and _outage_geometry_in_bbox(
-            row.get("outage_geojson"), OKANAGAN_AOI_BBOX
+            row.get("outage_geojson"), aoi_bbox
         ):
             keep_idx.append(idx)
             continue
-        if _okanagan_place_match(row):
+        region = str(row.get("region", "") or "").strip().casefold()
+        if region == target_region or target_region in region:
+            keep_idx.append(idx)
+            continue
+        municipality = str(row.get("municipality", "") or "").strip().casefold()
+        if municipality and (
+            municipality in place_set or any(place in municipality for place in place_set)
+        ):
             keep_idx.append(idx)
     return frame.loc[keep_idx].copy()
+
+
+def filter_outages_for_okanagan_map(outage_df: pd.DataFrame) -> pd.DataFrame:
+    """Keep live JSON rows whose coordinates or labels fall in the Okanagan AOI."""
+    return filter_outages_for_region_map(
+        outage_df,
+        aoi_bbox=OKANAGAN_AOI_BBOX,
+        bc_hydro_region=OKANAGAN_BC_HYDRO_REGION,
+        municipalities=OKANAGAN_MUNICIPALITIES,
+    )
 
 
 def _outage_dot_radius_px(point_count: int) -> int:
@@ -523,6 +544,32 @@ def planning_priority_legend_html() -> str:
         f"Planning priority (composite score: vegetation + wildfire + weather + treatment + outage)"
         f"</div>"
         f"<div>{stops}</div>"
+        f'<div style="margin-top:2px;">{labels}</div>'
+        f"</div>"
+    )
+
+
+def tree_contact_legend_html() -> str:
+    """HTML legend for tree-contact exposure proxy continuous ramp (0–100)."""
+    stops = (
+        ("0", "#2ecc71"),
+        ("50", "#f1c40f"),
+        ("100", "#c0392b"),
+    )
+    ramp = "".join(
+        f'<span style="display:inline-block;width:42px;height:14px;background:{color};"></span>'
+        for _, color in stops
+    )
+    labels = "".join(
+        f'<span style="font-size:0.75rem;margin-right:6px;">{label}</span>'
+        for label, _ in stops
+    )
+    return (
+        f'<div style="margin:4px 0 8px 0;">'
+        f'<div style="font-size:0.8rem;margin-bottom:2px;">'
+        f"Tree contact / fall-in review proxy (0 = low, 100 = high)"
+        f"</div>"
+        f"<div>{ramp}</div>"
         f'<div style="margin-top:2px;">{labels}</div>'
         f"</div>"
     )
