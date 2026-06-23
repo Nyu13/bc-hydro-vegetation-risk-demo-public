@@ -455,7 +455,15 @@ def build_okanagan_leaflet_map_html(
   <style>
     html, body, #map {{ height: 100%; margin: 0; padding: 0; }}
     .leaflet-tooltip {{ white-space: pre-line; font-size: 12px; }}
-    .leaflet-tooltip.wide-tooltip,
+    .leaflet-tooltip.wide-tooltip {{
+      min-width: 260px;
+      max-width: 340px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-line;
+      word-break: normal;
+      overflow-wrap: anywhere;
+    }}
     .leaflet-popup-content .point-popup {{
       min-width: 260px;
       max-width: 340px;
@@ -528,25 +536,28 @@ def build_okanagan_leaflet_map_html(
 
     function addMarkers(markers) {{
       markers.forEach(function(m) {{
-        let layer;
+        // Geographic fire extent (visual only — overlayPane, below corridor lines).
         if (m.radiusM) {{
-          layer = L.circle([m.lat, m.lon], {{
+          L.circle([m.lat, m.lon], {{
             radius: m.radiusM,
             color: m.color,
             fillColor: m.color,
-            fillOpacity: 0.28,
+            fillOpacity: 0.22,
             weight: 2,
-            opacity: 0.9
-          }});
-        }} else {{
-          layer = L.circleMarker([m.lat, m.lon], {{
-            radius: m.radius || 7,
-            color: m.color,
-            fillColor: m.color,
-            fillOpacity: 0.85,
-            weight: 1
-          }});
+            opacity: 0.85,
+            interactive: false
+          }}).addTo(map);
         }}
+        // Interactive hit target on markerPane so tooltips/popups stay above segments.
+        const hitRadius = m.radiusM ? Math.max(m.radius || 10, 10) : (m.radius || 7);
+        const layer = L.circleMarker([m.lat, m.lon], {{
+          radius: hitRadius,
+          color: m.color,
+          fillColor: m.color,
+          fillOpacity: m.radiusM ? 0.9 : 0.85,
+          weight: m.radiusM ? 2 : 1,
+          opacity: 0.95
+        }});
         if (m.popup) {{
           layer.bindPopup(m.popup, {{ maxWidth: 340, minWidth: 260, className: 'wide-popup' }});
         }}
@@ -554,9 +565,7 @@ def build_okanagan_leaflet_map_html(
           layer.bindTooltip(m.tooltip, {{ sticky: true, opacity: 0.95, className: 'wide-tooltip' }});
         }}
         layer.addTo(map);
-        if (m.radiusM) {{
-          layer.bringToFront();
-        }}
+        layer.bringToFront();
       }});
     }}
 
