@@ -2,7 +2,7 @@
 
 ## BC transmission geometry
 
-**Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md) · [TMP/docs/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/BC_TRANSMISSION_DOWNLOAD.md) (full URLs, KML stub note)
+**Step-by-step BC download:** [bc_transmission_lines_public_data.md](bc_transmission_lines_public_data.md) · [TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md) (full URLs, KML stub note)
 
 Preferred local export: `data/processed/bc_transmission_lines_lower_mainland.geojson` (gitignored) · Bundled fallback: `data/demo/demo_bc_transmission_lines_sample.geojson`
 

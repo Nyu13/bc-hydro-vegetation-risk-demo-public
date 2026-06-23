@@ -1,6 +1,6 @@
 # Open & Free Data for Surrey BC — Vegetation–Weather Outage Risk Demo
 
-Public and open datasets that can stand in for Planet commercial layers and BC Hydro internal vegetation/outage data during the Surrey proof-of-concept. Extends [open_data_fallbacks.md](open_data_fallbacks.md) with Surrey-specific availability, licensing, and implementation priority.
+Public and open datasets that can stand in for Planet commercial layers and BC Hydro internal vegetation/outage data during the Surrey proof-of-concept. Consolidates the former generic fallback matrix ([TMP/docs/archive/open_data_fallbacks.md](../TMP/docs/archive/open_data_fallbacks.md)) with Surrey-specific availability, licensing, and implementation priority.
 
 Planet remains enrichment; free/open data demonstrates workflow and reduces early purchase risk but does **not** replace Planet products or BC Hydro operational data.
 
@@ -22,7 +22,7 @@ Planet remains enrichment; free/open data demonstrates workflow and reduces earl
 | **I — DEM / terrain (BC + global)** | GeoBC / OpenTopography | [BC CDED 25 m](https://open.canada.ca/data/en/dataset/7b4fef7e-7cae-4379-97b8-62b03e9ac83d) · [BC elevation page](https://www2.gov.bc.ca/gov/content/data/geographic-data-services/topographic-data/elevation) · [OpenTopography SRTM/COP30](https://www.opentopography.org/) | **OGL-BC** / various open | **25 m** (BC CDED); **30 m** (Copernicus DEM/SRTM) | Elevation, **slope**, aspect, roughness | **terrain_access_score** (demo uses synthetic corridors today) | Public DEM ≠ ROW access / vehicle constraints; 25 m coarse for fine corridor grading | **Medium** |
 | **J — ECCC / ERA5 / SMAP / MODIS** | ECCC · ECMWF · NASA | [MSC GeoMet API](https://api.weather.gc.ca/) · [ERA5-Land CDS](https://cds.climate.copernicus.eu/) · [SMAP NSIDC](https://nsidc.org/data/nsidc-0779/versions/1) · [MOD11A1 LST](https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/MOD11A1) | ECCC open · CDS terms · NASA open | ECCC: station/forecast; ERA5-Land: **~9 km** hourly; SMAP: **1–9 km** daily; MODIS LST: **1 km** daily | Wind, precip, temperature (**ECCC**); soil moisture reanalysis (**ERA5**); surface moisture (**SMAP**); **LST** (**MODIS**) | Weather term (35% Planet formula); **F** dryness; **E** heat/drought stress | Point/station weather ≠ land-surface moisture at corridor scale; MODIS/SMAP much coarser than Planet SWC/LST 100 m | **High** (ECCC wired) · **Medium** (ERA5/SMAP/MODIS) |
 
-### Already integrated in demo (from open_data_fallbacks.md)
+### Already integrated in demo
 
 | Dataset | URL | Demo use | Priority |
 | --- | --- | --- | --- |
@@ -87,7 +87,7 @@ Planet remains enrichment; free/open data demonstrates workflow and reduces earl
 
 ## Comparison to Planet products (summary)
 
-See [planet_products_for_surrey.md](planet_products_for_surrey.md) and [open_data_fallbacks.md](open_data_fallbacks.md) for the full fallback matrix. Free data closes the **concept gap** (vegetation + environment + weather + public outages) but not the **operations gap** (feeders, treatments, validated causes, SAIDI/SAIFI).
+See [planet_surrey_data_request.md](planet_surrey_data_request.md) and [TMP/docs/archive/planet_products_for_surrey.md](../TMP/docs/archive/planet_products_for_surrey.md) for Planet product detail. Free data closes the **concept gap** (vegetation + environment + weather + public outages) but not the **operations gap** (feeders, treatments, validated causes, SAIDI/SAIFI).
 
 ---
 
@@ -107,4 +107,4 @@ Recommended first integrations for the Surrey 200 m corridor buffer (~3,580 ha),
 
 **Skip for Surrey PoC:** Copernicus CLMS HRL (Europe only). **Already wired:** ECCC weather, BC Hydro live outages, unofficial archive, BC transmission overlay.
 
-Implementation detail: [free_data_integration_plan.md](free_data_integration_plan.md).
+Pipeline steps: [free_data_pipeline_runbook.md](free_data_pipeline_runbook.md). Historical integration plan: [TMP/docs/archive/free_data_integration_plan.md](../TMP/docs/archive/free_data_integration_plan.md).

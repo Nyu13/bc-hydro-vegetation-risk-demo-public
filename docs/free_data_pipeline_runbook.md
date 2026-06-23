@@ -79,4 +79,4 @@ python -c "import app; from src.free_data_loader import load_surrey_free_data_su
 
 Commit small processed CSVs under `data/processed/` (gitignore exceptions). Large rasters stay in `data/raw/` (ignored).
 
-See also: [free_data_integration_plan.md](free_data_integration_plan.md), [open_free_data_for_surrey.md](open_free_data_for_surrey.md).
+See also: [open_free_data_for_surrey.md](open_free_data_for_surrey.md). Historical layer plan: [TMP/docs/archive/free_data_integration_plan.md](../TMP/docs/archive/free_data_integration_plan.md).

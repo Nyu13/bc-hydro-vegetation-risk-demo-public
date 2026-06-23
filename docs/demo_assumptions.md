@@ -8,7 +8,7 @@ This dashboard is an illustrative prototype and must not be used for operational
 
 **PoC pilot region:** Surrey (Lower Mainland) — UI defaults only; bundled data still includes all BC Hydro regions and municipalities.
 
-**Planet / Surrey PoC:** Sidebar **Data mode** controls whether the Planet placeholder CSV participates in scoring. See [surrey_planet_integration_notes.md](surrey_planet_integration_notes.md).
+**Planet / Surrey PoC:** Sidebar **Data mode** controls whether `data/demo/planet_surrey_sample_placeholder.csv` participates in scoring (`src/planet_loader.py`). Planet mode enriches vegetation exposure/dryness (green/brown, canopy, change, soil moisture, LST) but does **not** replace BC Hydro internal outage, feeder, or vegetation records. No live Planet API in the demo — placeholder CSV only. Quote and AOI: [planet_surrey_data_request.md](planet_surrey_data_request.md). Expanded integration notes: [TMP/docs/archive/surrey_planet_integration_notes.md](../TMP/docs/archive/surrey_planet_integration_notes.md).
 
 **Risk Map geometry:** **BC Hydro live** `outages-map-data.json` only; outages filtered to **Surrey** (municipality label when present, else `DEMO_PILOT_TRANSMISSION_BBOX`). Flat `polygon` lon/lat pairs are normalized to GeoJSON rings. Point markers appear only when no polygon exists.
 

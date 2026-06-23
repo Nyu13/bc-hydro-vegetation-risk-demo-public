@@ -1,0 +1,2 @@
+as_of_date,region,bbox_wgs84,transmission_lines_count,segment_count,total_length_km,mean_segment_km,buffer_m,target_segment_km,data_source,notes
+2026-06-22,Kelowna / Okanagan,"(-120.2, 49.5, -118.8, 50.5)",296,689,2256.09,3.274,200,5.0,openmaps.gov.bc.ca WFS + KML stub,Public transmission reference — not BC Hydro feeder/circuit topology.

@@ -12,7 +12,7 @@ Bundled sample: `data/demo/demo_bc_transmission_lines_sample.geojson` · Map tog
 | CSW ISO record | https://csw.open.canada.ca/geonetwork/srv/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=csw:IsoRecord&ElementSetName=full&id=384d551b-dee1-4df8-8148-b3fcf865096a |
 | BC ER ArcGIS portal | https://data-bc-er.opendata.arcgis.com/ |
 
-Full download notes (KML stub, ogr2ogr, blockers): [TMP/docs/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/BC_TRANSMISSION_DOWNLOAD.md).
+Developer download notes (KML stub, ogr2ogr, blockers): [TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md).
 
 ## Three recommended public sources
 
@@ -91,7 +91,7 @@ curl.exe -o data\WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml ^
   https://openmaps.gov.bc.ca/kml/geo/layers/WHSE_BASEMAPPING.GBA_TRANSMISSION_LINES_SP_loader.kml
 ```
 
-Use WFS or catalogue bulk download for real coordinates — see TMP/docs/BC_TRANSMISSION_DOWNLOAD.md.
+Use WFS or catalogue bulk download for real coordinates — see [TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md](../TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md).
 
 Per-layer WMS capabilities:
 

@@ -35,6 +35,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.config import (  # noqa: E402
     BC_TRANSMISSION_BC_GEOJSON,
+    BC_TRANSMISSION_LINES_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84,
     BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
     PROCESSED_DATA_DIR,
@@ -110,6 +111,14 @@ def to_processed_geojson(payload: dict, out_path: Path, *, dataset_note: str) ->
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_file(out_path, driver="GeoJSON")
+    if out_path == BC_TRANSMISSION_BC_GEOJSON or out_path == BC_TRANSMISSION_LINES_GEOJSON:
+        alias = (
+            BC_TRANSMISSION_LINES_GEOJSON
+            if out_path == BC_TRANSMISSION_BC_GEOJSON
+            else BC_TRANSMISSION_BC_GEOJSON
+        )
+        if alias != out_path:
+            out.to_file(alias, driver="GeoJSON")
     return out_path
 
 
@@ -142,7 +151,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.out is None:
-        args.out = BC_TRANSMISSION_BC_GEOJSON if args.full_province else BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON
+        args.out = BC_TRANSMISSION_LINES_GEOJSON if args.full_province else BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON
     bbox = None if args.full_province else tuple(args.bbox)
     dataset_note = DATASET_NOTE_BC if args.full_province else DATASET_NOTE_LM
 

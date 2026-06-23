@@ -1,6 +1,6 @@
 # Planet Research Summary — Surrey BC PoC
 
-Condensed findings from Planet documentation review (2026-05-29). Full detail: [planet_surrey_data_request.md](../docs/planet_surrey_data_request.md), [planet_products_for_surrey.md](../docs/planet_products_for_surrey.md).
+Condensed findings from Planet documentation review (2026-05-29). Full detail: [planet_surrey_data_request.md](../../../docs/planet_surrey_data_request.md), [planet_products_for_surrey.md](planet_products_for_surrey.md) (this folder).
 
 ---
 

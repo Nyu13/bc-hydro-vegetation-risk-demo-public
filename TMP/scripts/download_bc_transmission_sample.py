@@ -15,7 +15,7 @@ Full-province or custom exports (gitignored):
   data/raw/bc_transmission_lines_full.geojson
 
 Metadata: https://geocore.metadata.geo.ca/384d551b-dee1-4df8-8148-b3fcf865096a.geojson
-Docs: TMP/docs/BC_TRANSMISSION_DOWNLOAD.md
+Docs: docs/bc_transmission_lines_public_data.md (archive: TMP/docs/archive/BC_TRANSMISSION_DOWNLOAD.md)
 """
 from __future__ import annotations
 

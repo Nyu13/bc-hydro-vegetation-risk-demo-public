@@ -1,8 +1,8 @@
 # Manager demo walkthrough (~5 minutes)
 
-**Total time:** ~5:00 · **Audience:** managers / sponsors · **App:** Streamlit demo (Overview tab first)
+**Total time:** ~5:00 · **Audience:** managers / sponsors · **App:** Streamlit Okanagan demo (Overview tab first)
 
-**Framing (repeat as needed):** This is a **proof-of-process** workflow using **public/proxy** data. It supports **review prioritization** and discovery—not outage prediction. Any operational use **requires internal validation** with BC Hydro data and governance.
+**Framing (repeat as needed):** This is a **proof-of-process** workflow using **public/proxy** data for **vegetation-wildfire planning** in Okanagan / Kootenay transmission corridors—not outage prediction. Any operational use **requires internal validation** with BC Hydro data and governance.
 
 ---
 
@@ -12,152 +12,89 @@
 
 **Talking points**
 
-- Today we are showing **how signals could be combined** into a transparent review queue—not **when or where the next outage will occur**.
-- The disclaimer on screen is intentional: **illustrative workflow and analytical logic only**; **not for operational decisions**.
+- Today we are showing **how public layers could support corridor planning** in wildfire-relevant terrain—not **when or where the next outage will occur**.
+- The disclaimer on screen is intentional: **proof-of-process only**; **not for operational decisions**.
 - Think of this as a **discovery conversation**: Can we ingest, join, rank, and explain drivers with the data we can access today?
-- We are **not** claiming validated BC Hydro outage prediction, production readiness, or official historical outage statistics.
 
-**If asked:** “When will this predict outages?” → **No—it ranks corridors for review using proxies; calibration needs internal data.**
+**If asked:** “When will this predict outages?” → **No—it ranks corridor segments for planning review using proxies.**
 
 ---
 
 ## 2. Overview — 45 sec
 
-**Tab:** **Overview** → **Manager summary**
+**Tab:** **Overview**
 
 **Goal:** Mirror the in-app “shows / does not show” lists.
 
 **Talking points**
 
 - **What it shows**
-  - A **concept workflow**: vegetation + weather + outage-proxy signals → a **review-oriented** dashboard.
-  - **Dashboard structure**: summary metrics, ranking, top drivers, map, and a synthetic backtesting view for discussion.
-  - **Public/proxy integration**: live BC Hydro public feeds, unofficial archive snapshots, open datasets—not a full internal stack.
-  - **Illustrative scoring**: weighted demo score with visible drivers—not a calibrated production model.
+  - **Vegetation-wildfire planning workflow** — corridor segments ranked by composite exposure
+  - **Public layer stack** — WorldCover, Sentinel-2, CWFIS, ECCC weather stress, outage archive proxy
+  - **Treatment gap placeholder** — where BC Hydro work-management data would plug in
+  - **Transparent proxy scoring** — component breakdown per segment
 - **What it does not show**
-  - **Validated outage prediction** or forecast certainty.
-  - **Real feeder/circuit topology** from BC Hydro systems.
-  - **Internal vegetation treatment / patrol history** (placeholders where Planet is off).
-  - **Operational readiness** (control room, GIS assets, crew dispatch, SLAs, model lifecycle).
-- Maturity today: **working proof-of-process** with real open/free satellite layers for Surrey; **Planet is optional** to prove the workflow but would strengthen the remote-sensing layer.
+  - **Outage prediction** or storm-risk forecasting
+  - **Validated wildfire or vegetation treatment prioritization**
+  - **Internal GIS, SAIDI/SAIFI, or patrol records**
+  - **Operational dispatch** or control-room tooling
 
-**If asked:** “Is this production?” → **No—proof-of-process for prioritization and data discovery.**
+**If asked:** “Is this production?” → **No—proof-of-process for planning prioritization and data discovery.**
 
 ---
 
-## 3. Area selection — 45 sec
+## 3. Kelowna / Okanagan Planning — 2 min
 
-**Tab:** **Area selection**
+**Tab:** **Kelowna / Okanagan Planning**
 
-**Goal:** Explain geography choice and outage-history limits.
+**Goal:** Walk through the main map, ranking table, and score breakdown.
 
 **Talking points**
 
-- **Pilot focus:** **Surrey** (highlighted row)—our PoC municipality in the Lower Mainland.
-- **Two outage views**
-  - **Historical archive (not live):** unofficial snapshot proxy with date range in the banner—**not BC Hydro–provided**, **not authoritative** for history.
-  - **Current outages:** live public JSON/RSS on **Risk Dashboard** / **Risk Map**—reflect **recent visibility**, not a complete archive.
-- **Unique outages** in tables = distinct outage IDs in the unofficial archive (**proxy metric**), not official BC Hydro historical reporting.
-- Rankings help **compare public/proxy hotspots** for workshop discussion—not certify regional risk.
-- Yellow-highlighted rows = **demo/synthetic** where applicable; read provenance badges.
+- **Vegetation & satellite context** — WorldCover mean tree cover (~35%) and built-up (~13%); Sentinel-2 NDVI/NDMI; dryness proxy from NDMI (moisture stress, not field soil moisture).
+- **Planning map** — pick a **2026 date**; toggle CWFIS **FWI raster**, **fires**, and **archive outages** for that day; BC transmission lines; corridor segments (planning priority vs dated FWI).
+- **Segment popups** — click a corridor line for full score breakdown plus satellite fields (NDVI, NDMI, dryness, tree/built cover).
+- **Top corridor segments** — ranked table with vegetation dryness, tree/built %, and component scores.
+- **Score breakdown + Vegetation drivers** — composite components plus WorldCover composition and Sentinel-2 moisture/greenness charts.
 
-**If asked:** “Is this BC Hydro’s official outage history?” → **No—public feeds plus unofficial archive proxy only.**
+**If asked:** “Does High mean an outage?” → **No—Higher proxy score for planning discussion, not dispatch.**
 
----
-
-## 4. Surrey PoC Sample — 90 sec
-
-**Tab:** **Surrey PoC Sample**
-
-**Goal:** Show open/free layers reducing synthetic assumptions; position Planet as the next upgrade.
-
-**Talking points**
-
-- **WorldCover (static land cover):** corridor-level **exposure context**—what land cover types sit near demo transmission segments.
-- **Sentinel-2 (NDVI / NDMI):** vegetation **greenness** and **moisture proxies** from open imagery; scene QA and cloud masking are visible—**coastal BC cloud gaps are expected**.
-- **ECCC weather stress proxy:** temperature, wind gust, precipitation—**atmospheric stress only**; not soil water, land surface temperature, or canopy stress.
-- Together, these **reduce reliance on synthetic vegetation scores** in **Public/proxy** mode—they are **proof-of-process**, suitable for discovery, **not operational decision-making**.
-- **What this proves (in-app bullets):** focused corridor AOI, ingest public weather/outage/corridor/satellite data, transparent drivers, baseline before commercial imagery.
-- **Planet improvements (when purchased):** higher-resolution canopy structure, more frequent condition updates, commercial SWC/LST, better change detection, clearer licensing for internal/client **proof-of-process** demos.
-- **AOI context for procurement:** preferred sample = **Surrey transmission corridor 200 m buffer, ~3,580 ha** (balances exposure, cost, and testable corridor ranking vs. full municipal boundary ~36k ha).
-
-**If asked:** “Can we ship on Sentinel-2 alone?” → **Not for ops—good baseline; Planet (or similar) is the commercial path for decision-grade vegetation stress.**
+**If asked:** “Why is dryness 100?” → **NDMI is negative/low in this imagery window; dryness is a proxy from satellite moisture index, not a field measurement. Planet SWC or patrol data would validate.**
 
 ---
 
-## 5. Risk Dashboard — 60 sec
-
-**Tab:** **Risk Dashboard**
-
-**Goal:** Demonstrate decision-support *style* without overclaiming outcomes.
-
-**Talking points**
-
-- **Ranking table:** demo corridors sorted by illustrative risk score—use for **review prioritization**, not dispatch orders.
-- **Top risk drivers** chart: which signal dominated (vegetation exposure proxy, weather stress, public outage density proxy, etc.)—supports **explainability**.
-- **Suggested review actions** (example language in app): e.g. “Review corridor exposure before storm window,” “Consider crew/material pre-staging,” “Prioritize patrol if forecast severity increases”—**decision-support examples**, not automated work orders.
-- **Storm risk summary** cards: tie weather + outage visibility + data mode badge (Public/proxy vs Planet sample vs synthetic fallback).
-- **Live outages section:** Surrey-filtered map JSON when available; empty feed ≠ zero risk—data visibility limitation.
-- Close with: **Any change to patrol, staging, or investment still requires internal validation** against BC Hydro systems and subject-matter review.
-
-**If asked:** “Will High always mean an outage?” → **No—High means higher proxy score for discussion in the queue.**
-
----
-
-## 6. Data Sources & Assumptions — 45 sec
+## 4. Data Sources & Assumptions — 45 sec
 
 **Tab:** **Data Sources & Assumptions**
 
-**Goal:** Draw the public/proxy vs internal boundary and show layer inventory.
+**Goal:** Draw the public/proxy vs internal boundary.
 
 **Talking points**
 
-- **Source catalog:** what each layer is, where it comes from, and demo use (live JSON, unofficial archive, ECCC, WorldCover, Sentinel-2, transmission demo segments, optional Planet sample CSV).
-- **Public/proxy vs internal boundary (read verbatim if needed)**
-  - Public/proxy → **concept demonstration and proxy-based ranking only**.
-  - Internal BC Hydro data → **formal PoC calibration, validation, operational use**.
-  - **No production claim** without validated internal data and governance.
-- **Assumptions & limitations:** prototype only; incomplete historical archive; unofficial snapshots **not authoritative**; corridor markers are **demo segments**, not distribution feeders; vegetation scores are **proxies** without Planet/LiDAR/patrol records.
-- Point to docs linked in-app (`data_sources.md`, open/free pipeline runbooks) for technical follow-up.
+- **Layer inventory** — Okanagan pipeline artifacts and load status.
+- **BC Hydro replacement table** — internal data needed for validation.
+- **Assumptions** — unofficial outage archive proxy, ECCC weather near Kelowna, synthetic treatment gap, public transmission geometry (not distribution feeders).
 
-**If asked:** “What do we need from BC Hydro?” → **Internal outage history, topology, vegetation treatments, asset condition—listed under internal data boundary.**
+**If asked:** “What do we need from BC Hydro?” → **Internal outage history, topology, vegetation treatments, asset condition—listed in the replacement table.**
 
 ---
 
-## 7. Recommended next decision — 30 sec
-
-**Tab:** **Data Sources & Assumptions** → **Planet commercial data (Surrey PoC)** (or end on Overview recommended step)
+## 5. Recommended next decision — 30 sec
 
 **Goal:** One clear ask to leave the room with.
 
 **Talking points**
 
-- **Recommended next action:** Request a **Planet quote** for the **Surrey 200 m transmission corridor buffer (~3,580 ha)**—the in-app AOI comparison shows why 200 m is the balanced first purchase vs. 100 m / 300 m / full municipality.
-- Sample products in scope: **Forest Carbon Monitoring** (canopy), **SWC**, **LST**, **ARPS / PlanetScope-derived** greenness/dryness and change indicators—summarized by corridor AOI.
-- Planet **strengthens the vegetation/environment layer**; it does **not** replace internal outage history, feeder topology, treatment records, or SAIDI/SAIFI.
-- Parallel non-commercial path: continue **open/free baseline** (WorldCover + Sentinel-2 + ECCC) while internal data owners confirm **pilot success criteria** and joinability.
-- **Decision for this meeting:** Approve **quote request + discovery workshop** (data owners, validation plan)—not production rollout.
+- **Recommended next action:** Review top corridor segments with BC Hydro stakeholders; confirm data owners and success criteria for a formal PoC.
+- Run `python TMP/scripts/build_okanagan_demo_pipeline.py` if any layers show as missing.
+- **Decision for this meeting:** Approve **discovery workshop** (data owners, validation plan)—not production rollout.
 
-**Closing line:** “We have a repeatable proof-of-process; the next gate is **commercial imagery quote** and **internal validation**, not turning the demo dial to ‘prediction.’”
-
----
-
-## Quick reference — language to use / avoid
-
-| Use | Avoid |
-|-----|--------|
-| Proof-of-process | Predicts outages |
-| Review prioritization | Operational dispatch |
-| Public/proxy data | Official BC Hydro historical outage claims |
-| Requires internal validation | Production-ready / calibrated model |
-| Decision-support examples | Automated decisions |
-| Illustrative / proxy scoring | Forecast certainty |
+**Closing line:** “We have a repeatable proof-of-process for Okanagan corridor planning; the next gate is **internal validation**, not turning the demo into prediction.”
 
 ---
 
 ## Pre-demo checklist (30 sec before start)
 
-- [ ] Sidebar: **Surrey** region; data mode **Public/proxy only** (unless showing Planet sample intentionally).
-- [ ] Note whether live outage JSON returns rows (network/TLS); if empty, mention **demo fallback** toggle without implying zero outages.
-- [ ] Open **Overview → Manager summary** as landing tab.
-- [ ] Have `docs/planet_surrey_data_request.md` ready if Planet pricing questions go deep.
+- [ ] Sidebar: **Light** or **Dark** theme as preferred.
+- [ ] Open **Overview** as landing tab.
+- [ ] Confirm Okanagan pipeline artifacts exist (Planning tab loads without “run pipeline” warning).

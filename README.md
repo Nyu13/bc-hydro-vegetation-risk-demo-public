@@ -8,14 +8,14 @@ This project is a **demo-only** Streamlit **concept dashboard** that illustrates
 
 This prototype illustrates analytical workflow only; it does not predict BC Hydro outages and must not be used for operational decisions.
 
-**PoC pilot area:** Surrey (`DEMO_PILOT_MUNICIPALITY` in `src/config.py`; BC Hydro region `Lower Mainland`). On load: municipality view, Surrey listed first, maps at ~49.19°N / 122.85°W, demo corridors filtered to Surrey when present. **All BC regions** and **All BC demo corridors** expanders keep province-wide context.
+**Demo region (current):** **Kelowna / Okanagan** — vegetation-wildfire-outage **planning prioritization** workflow. Run `streamlit run app.py` and use the **Kelowna / Okanagan Planning** tab. Surrey PoC code and scripts remain in the repo but are not in the live demo UI.
 
 ## What This Demo Shows
 
-- Where outage risk may be elevated (illustrative demo corridors)
-- Why risk may be elevated (weather, vegetation proxy, outage proxy, terrain/access)
-- How corridors can be ranked by risk level
-- How an illustrative demo backtesting view can be presented (synthetic data)
+- Where transmission corridor segments may warrant vegetation review (689 Okanagan segments)
+- Why priority may be elevated (vegetation cover, wildfire context, weather stress, outage proxy, treatment gap)
+- How corridors can be ranked by planning priority score
+- How public/proxy layers combine into a transparent planning workflow
 
 ## What This Demo Does NOT Claim
 
@@ -117,7 +117,7 @@ Public outage JSON/RSS and the weather loader are cached for the Streamlit sessi
 - `app.py`: Streamlit app
 - `src/`: loaders, scoring, backtesting, visualization helpers
 - `data/demo/`: fallback synthetic demo datasets
-- `docs/`: assumptions, sources, and internal data requirements
+- `docs/`: current demo guides (see [Documentation](#documentation) below)
 - `notebooks/`: optional exploration notebook placeholder
 
 ## Public/Proxy Data Sources Referenced
@@ -227,3 +227,25 @@ A formal PoC would replace proxies with BC Hydro internal data including:
 - operational telemetry and event logs
 
 See `docs/bc_hydro_internal_data_needed.md` for detailed data requirements.
+
+## Documentation
+
+Start here: **[docs/current_demo_overview.md](docs/current_demo_overview.md)** — tabs, data layers, scoring, pipelines, deploy notes.
+
+| Document | Audience |
+| --- | --- |
+| [current_demo_overview.md](docs/current_demo_overview.md) | Managers + developers — single source of truth |
+| [manager_demo_script.md](docs/manager_demo_script.md) | ~5 min live demo script |
+| [demo_assumptions.md](docs/demo_assumptions.md) | Disclaimers, scoring weights, TLS, data modes |
+| [data_sources.md](docs/data_sources.md) | Layer catalog and provenance |
+| [free_data_pipeline_runbook.md](docs/free_data_pipeline_runbook.md) | Build `data/processed/` open/free outputs |
+| [open_free_data_for_surrey.md](docs/open_free_data_for_surrey.md) | Surrey open datasets vs Planet |
+| [sentinel2_manual_download_notes.md](docs/sentinel2_manual_download_notes.md) | Copernicus CDSE download + processing |
+| [planet_surrey_data_request.md](docs/planet_surrey_data_request.md) | Planet commercial quote / AOI package |
+| [surrey_aoi_options.md](docs/surrey_aoi_options.md) | AOI geometries and hectares |
+| [bc_hydro_internal_data_needed.md](docs/bc_hydro_internal_data_needed.md) | Formal PoC internal data requirements |
+| [bc_transmission_lines_public_data.md](docs/bc_transmission_lines_public_data.md) | BC public transmission download |
+
+**Client workshop assets (Word/PPT):** `docs/docs_and_presentation/` — not modified by doc cleanup.
+
+**Archived planning notes:** [TMP/docs/archive/README.md](TMP/docs/archive/README.md) — superseded duplicates (Planet product matrix, integration plans, extractor wiring).

@@ -39,6 +39,21 @@ data/processed/*
 !data/processed/surrey_eccc_weather_stress_stats.csv
 !data/processed/surrey_vri_corridor_stats.csv
 !data/processed/surrey_terrain_corridor_stats.csv
+!data/processed/causal_ai_surrey_corridor_dataset.csv
+!data/processed/causal_ai_surrey_aoi_scenarios.csv
+!data/processed/causal_ai_synthetic_training_dataset.csv
+!data/processed/causal_ai_surrey_discovery_raw.csv
+!data/processed/causal_ai_surrey_discovery_with_targets.csv
+!data/processed/okanagan_vegetation_wildfire_planning_dataset.csv
+!data/processed/okanagan_transmission_qa_summary.csv
+!data/processed/okanagan_weather_stress_stats.csv
+!data/processed/okanagan_weather_stress_daily.csv
+!data/processed/okanagan_outage_proxy_summary.csv
+!data/processed/okanagan_outage_daily_proxy.csv
+!data/processed/okanagan_fwi_sample.csv
+!data/processed/okanagan_fwi_corridor_sample.csv
+!data/processed/okanagan_sentinel2_scene_qa.csv
+!data/processed/okanagan_sentinel2_corridor_stats.csv
 
 # Optional full GPKG/ZIP copies (use bundled data/demo/*.geojson sample instead)
 data/lignes-transport-electrique-2020.gpkg

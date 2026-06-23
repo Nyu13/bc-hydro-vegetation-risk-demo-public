@@ -10,6 +10,7 @@ from src.config import (
     BC_TRANSMISSION_BC_GEOJSON,
     BC_TRANSMISSION_GEOJSON,
     BC_TRANSMISSION_KML,
+    BC_TRANSMISSION_LINES_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_BBOX_WGS84,
     BC_TRANSMISSION_LOWER_MAINLAND_BUNDLED_GEOJSON,
     BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON,
@@ -59,6 +60,8 @@ def resolve_bc_transmission_geojson() -> Path | None:
     Prefer local WFS exports (data/processed/) when present; else bundled Lower Mainland;
     else small demo sample for offline/legacy deploys.
     """
+    if BC_TRANSMISSION_LINES_GEOJSON.exists():
+        return BC_TRANSMISSION_LINES_GEOJSON
     if BC_TRANSMISSION_BC_GEOJSON.exists():
         return BC_TRANSMISSION_BC_GEOJSON
     if BC_TRANSMISSION_LOWER_MAINLAND_GEOJSON.exists():

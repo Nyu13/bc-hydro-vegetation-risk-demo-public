@@ -24,7 +24,7 @@ This request covers:
 
 ## 2. Requested products (Products A–F)
 
-Detailed comparison: [planet_products_for_surrey.md](planet_products_for_surrey.md).
+Detailed comparison (Products A–F): [TMP/docs/archive/planet_products_for_surrey.md](../TMP/docs/archive/planet_products_for_surrey.md).
 
 | ID | Product | Preferred resolution | PoC role |
 | --- | --- | --- | --- |
@@ -125,7 +125,7 @@ Per [Planet Sandbox Data](https://docs.planet.com/data/planet-sandbox-data/):
 - Redistribution of Planet rasters outside licensed parties
 - Replacement of BC Hydro authoritative GIS or outage systems
 
-**Attribution:** Fujitsu dashboard will display Planet data provenance and [PLANET_POC_DISCLAIMER](surrey_planet_integration_notes.md) text.
+**Attribution:** Fujitsu dashboard will display Planet data provenance and `PLANET_POC_DISCLAIMER` from `src/config.py` (see [demo_assumptions.md](demo_assumptions.md)).
 
 ---
 
@@ -176,12 +176,12 @@ Use **Alberta SWC/LST sandbox** and **FCM sandbox (Idaho/Iowa)** for API develop
 
 | File | Purpose |
 | --- | --- |
-| `docs/planet_products_for_surrey.md` | Products A–F table |
+| `TMP/docs/archive/planet_products_for_surrey.md` | Products A–F table |
 | `docs/surrey_aoi_options.md` | AOI options + hectares |
 | `docs/planet_surrey_data_request.md` | This quote package |
-| `docs/demo_plan_with_planet_surrey.md` | Streamlit integration plan |
-| `docs/open_data_fallbacks.md` | Public data fallbacks vs Planet |
-| `TMP/docs/planet_research_summary.md` | Condensed Planet research notes |
+| `docs/current_demo_overview.md` | Current app + pipeline state |
+| `docs/open_free_data_for_surrey.md` | Public data fallbacks vs Planet |
+| `TMP/docs/archive/planet_research_summary.md` | Condensed Planet research notes |
 | `TMP/docs/surrey_aoi_hectares.json` | Machine-readable AOI areas |
 | `TMP/scripts/compute_surrey_aoi_options.py` | Boundary download + buffer calc |
 | `data/demo/surrey_municipal_boundary.geojson` | Option 1 geometry |
@@ -193,7 +193,7 @@ Use **Alberta SWC/LST sandbox** and **FCM sandbox (Idaho/Iowa)** for API develop
 1. Attach **AOI GeoJSON** (lead: 200 m buffer) and link to this document.
 2. Request **trial + sandbox** activation and **written quote** for 12-month PoC on ~3,580 ha.
 3. Ask Planet to confirm **Product A (vegetation cover fraction)** SKU and **change detection** recommendation.
-4. Schedule **BC Hydro workshop** showing placeholder dashboard → live Planet feed roadmap ([demo_plan_with_planet_surrey.md](demo_plan_with_planet_surrey.md)).
+4. Schedule **BC Hydro workshop** showing placeholder dashboard → live Planet feed roadmap ([current_demo_overview.md](current_demo_overview.md); historical plan: [TMP/docs/archive/demo_plan_with_planet_surrey.md](../TMP/docs/archive/demo_plan_with_planet_surrey.md)).
 5. Parallel track: BC Hydro internal data checklist — Planet does not replace outage/feeder/vegetation ops data.
 
 ### Sandbox products available (confirmed from Planet docs)
