@@ -596,6 +596,94 @@ def _example_problem_areas_section(
     return st.session_state.get(focus_key)
 
 
+def _planning_compact_summary(region: PlanningRegionConfig, df: pd.DataFrame) -> None:
+    """Corridor-level KPIs for presentation — always visible near the map."""
+    cols = st.columns(5)
+    cols[0].metric("Corridor segments", len(df))
+    critical = (
+        int((df["planning_priority_level"] == "Critical").sum())
+        if "planning_priority_level" in df.columns
+        else 0
+    )
+    high = (
+        int((df["planning_priority_level"] == "High").sum())
+        if "planning_priority_level" in df.columns
+        else 0
+    )
+    cols[1].metric("Critical", critical)
+    cols[2].metric("High", high)
+    mean_score = (
+        df["planning_priority_score"].mean()
+        if "planning_priority_score" in df.columns
+        else 0
+    )
+    cols[3].metric(
+        "Mean priority score",
+        f"{mean_score:.1f}" if pd.notna(mean_score) else "—",
+    )
+    cols[4].metric("Region", region.region_name)
+    st.caption("Detailed data diagnostics are available below for technical review.")
+
+
+def _planning_technical_details(region: PlanningRegionConfig, df: pd.DataFrame) -> None:
+    """Diagnostic charts, tables, and data-source context for technical review."""
+    _vegetation_executive_summary(region, df)
+    _causal_ai_section(region)
+    _satellite_vegetation_section(region, df)
+
+    st.markdown("#### Top corridor segments")
+    display_cols = [
+        c
+        for c in (
+            "segment_id",
+            "corridor_id",
+            "length_km",
+            "planning_priority_score",
+            "planning_priority_level",
+            "problem_type",
+            "tree_contact_exposure_proxy",
+            "recommended_planning_action",
+            "risk_pathway",
+            "sentinel2_ndvi_mean",
+            "sentinel2_ndmi_mean",
+            "worldcover_tree_pct",
+            "worldcover_built_pct",
+            "vegetation_dryness_score",
+            "vegetation_score",
+            "wildfire_exposure_score",
+            "eccc_weather_stress_score",
+            "treatment_gap_score",
+            "outage_history_proxy_score",
+            "top_reason_1",
+        )
+        if c in df.columns
+    ]
+    top = df.sort_values("planning_priority_score", ascending=False).head(15)
+    st.dataframe(top[display_cols], width="stretch", hide_index=True)
+
+    st.markdown("#### Score breakdown (component means)")
+    comp_cols = [
+        c
+        for c in (
+            "vegetation_score",
+            "wildfire_exposure_score",
+            "eccc_weather_stress_score",
+            "treatment_gap_score",
+            "outage_history_proxy_score",
+            "terrain_score",
+        )
+        if c in df.columns
+    ]
+    if comp_cols:
+        breakdown = df[comp_cols].mean().round(1).reset_index()
+        breakdown.columns = ["component", "mean_score"]
+        fig = px.bar(breakdown, x="component", y="mean_score", title="Mean component scores (0–100)")
+        apply_plotly_chart_theme(fig, dark=_chart_dark)
+        st.plotly_chart(fig, width="stretch")
+
+    _vegetation_drivers_section(region, df)
+
+
 def _causal_ai_section(region: PlanningRegionConfig) -> None:
     if region.key != "surrey":
         return
@@ -668,19 +756,7 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
             "Synthetic stress scenario — illustrative only. Not observed BC Hydro data."
         )
 
-    cols = st.columns(5)
-    cols[0].metric("Corridor segments", len(df))
-    critical = int((df["planning_priority_level"] == "Critical").sum()) if "planning_priority_level" in df.columns else 0
-    high = int((df["planning_priority_level"] == "High").sum()) if "planning_priority_level" in df.columns else 0
-    cols[1].metric("Critical", critical)
-    cols[2].metric("High", high)
-    mean_score = df["planning_priority_score"].mean() if "planning_priority_score" in df.columns else 0
-    cols[3].metric("Mean priority score", f"{mean_score:.1f}" if pd.notna(mean_score) else "—")
-    cols[4].metric("Region", region.region_name)
-
-    _vegetation_executive_summary(region, df)
-    _causal_ai_section(region)
-    focus_segment_id = _example_problem_areas_section(region, df, stress_mode=stress_mode)
+    focus_segment_id = st.session_state.get(f"{region.key}_map_focus_segment_id")
 
     st.markdown("#### Planning map")
     if stress_mode:
@@ -707,10 +783,10 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
 
     _MAP_TOGGLE_DEFAULTS = {
         f"{region.key}_show_fwi_raster": False,
-        f"{region.key}_show_segments": True,
-        f"{region.key}_show_fires": True,
-        f"{region.key}_show_archive_outages": True,
-        f"{region.key}_show_tx_lines": True,
+        f"{region.key}_show_segments": False,
+        f"{region.key}_show_fires": False,
+        f"{region.key}_show_archive_outages": False,
+        f"{region.key}_show_tx_lines": False,
         f"{region.key}_show_buffer": False,
         f"{region.key}_show_live_outages": False,
         f"{region.key}_segment_color_mode": "planning_priority_score",
@@ -923,8 +999,6 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
         elif archive_outage_status not in {"", "snapshot_exact"}:
             st.caption(f"No outage archive points for {selected_date_iso} ({archive_outage_status}).")
 
-    _satellite_vegetation_section(region, df)
-
     if show_tx_lines:
         st.caption(
             "Transmission lines: province-wide BC Geographic Warehouse reference overlay. "
@@ -958,87 +1032,275 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
             "Values vary along the corridor by local weather/fire danger — not the composite planning score."
         )
 
-    st.markdown("#### Top corridor segments")
-    display_cols = [
-        c
-        for c in (
-            "segment_id",
-            "corridor_id",
-            "length_km",
-            "planning_priority_score",
-            "planning_priority_level",
-            "problem_type",
-            "tree_contact_exposure_proxy",
-            "recommended_planning_action",
-            "risk_pathway",
-            "sentinel2_ndvi_mean",
-            "sentinel2_ndmi_mean",
-            "worldcover_tree_pct",
-            "worldcover_built_pct",
-            "vegetation_dryness_score",
-            "vegetation_score",
-            "wildfire_exposure_score",
-            "eccc_weather_stress_score",
-            "treatment_gap_score",
-            "outage_history_proxy_score",
-            "top_reason_1",
-        )
-        if c in df.columns
-    ]
-    top = df.sort_values("planning_priority_score", ascending=False).head(15)
-    st.dataframe(top[display_cols], width="stretch", hide_index=True)
+    _planning_compact_summary(region, df)
+    _example_problem_areas_section(region, df, stress_mode=stress_mode)
 
-    st.markdown("#### Score breakdown (component means)")
-    comp_cols = [
-        c
-        for c in (
-            "vegetation_score",
-            "wildfire_exposure_score",
-            "eccc_weather_stress_score",
-            "treatment_gap_score",
-            "outage_history_proxy_score",
-            "terrain_score",
-        )
-        if c in df.columns
-    ]
-    if comp_cols:
-        breakdown = df[comp_cols].mean().round(1).reset_index()
-        breakdown.columns = ["component", "mean_score"]
-        fig = px.bar(breakdown, x="component", y="mean_score", title="Mean component scores (0–100)")
-        apply_plotly_chart_theme(fig, dark=_chart_dark)
-        st.plotly_chart(fig, width="stretch")
+    with st.expander("Technical details / data diagnostics", expanded=False):
+        _planning_technical_details(region, df)
 
-    _vegetation_drivers_section(region, df)
+
+def _demo_demonstrates_layout_styles() -> str:
+    return """
+<style>
+  /* CSS grid avoids Streamlit column DOM — equal row heights on wide screens */
+  .demo-demonstrates-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+    align-items: stretch;
+    width: 100%;
+    margin-bottom: 0.35rem;
+  }
+  .demo-demonstrates-grid > .demo-demonstrates-card {
+    height: 100%;
+    min-height: 560px;
+    box-sizing: border-box;
+  }
+  @media (max-width: 1100px) {
+    .demo-demonstrates-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .demo-demonstrates-grid > .demo-demonstrates-card {
+      min-height: 0;
+    }
+  }
+  @media (max-width: 640px) {
+    .demo-demonstrates-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+"""
+
+
+def _demo_demonstrates_card_styles(*, dark: bool) -> str:
+    if dark:
+        return """
+<style>
+  .demo-demonstrates-card {
+    background: #1f2430;
+    border: 1px solid #3d4454;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    font-size: 1.05rem;
+    line-height: 1.4;
+    color: #d0d7de;
+  }
+  .demo-demonstrates-card h4 {
+    color: #7fdbca;
+    font-size: 1.28rem;
+    font-weight: 600;
+    margin: 0 0 0.45rem 0;
+    line-height: 1.3;
+  }
+  .demo-demonstrates-card .demo-card-body {
+    flex: 1 1 auto;
+  }
+  .demo-demonstrates-card .demo-card-sub {
+    color: #a0a8b0;
+    margin: 0 0 0.4rem 0;
+    font-size: 1.08rem;
+  }
+  .demo-demonstrates-card ul {
+    margin: 0.25rem 0 0.5rem 1.15rem;
+    padding: 0;
+    font-size: 1.05rem;
+  }
+  .demo-demonstrates-card li { margin-bottom: 0.2rem; }
+  .demo-demonstrates-card .demo-card-label {
+    font-weight: 600;
+    color: #c9d1d9;
+    margin: 0.4rem 0 0.2rem 0;
+    font-size: 0.98rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .demo-demonstrates-card .demo-card-bottom {
+    margin: 0.5rem 0 0 0;
+    margin-top: auto;
+    color: #8b949e;
+    font-size: 0.98rem;
+    border-top: 1px solid #3d4454;
+    padding-top: 0.45rem;
+  }
+</style>
+"""
+    return """
+<style>
+  .demo-demonstrates-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    font-size: 1.05rem;
+    line-height: 1.4;
+    color: #212529;
+  }
+  .demo-demonstrates-card h4 {
+    color: #198754;
+    font-size: 1.28rem;
+    font-weight: 600;
+    margin: 0 0 0.45rem 0;
+    line-height: 1.3;
+  }
+  .demo-demonstrates-card .demo-card-body {
+    flex: 1 1 auto;
+  }
+  .demo-demonstrates-card .demo-card-sub {
+    color: #495057;
+    margin: 0 0 0.4rem 0;
+    font-size: 1.08rem;
+  }
+  .demo-demonstrates-card ul {
+    margin: 0.25rem 0 0.5rem 1.15rem;
+    padding: 0;
+    font-size: 1.05rem;
+  }
+  .demo-demonstrates-card li { margin-bottom: 0.2rem; }
+  .demo-demonstrates-card .demo-card-label {
+    font-weight: 600;
+    color: #343a40;
+    margin: 0.4rem 0 0.2rem 0;
+    font-size: 0.98rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .demo-demonstrates-card .demo-card-bottom {
+    margin: 0.5rem 0 0 0;
+    margin-top: auto;
+    color: #6c757d;
+    font-size: 0.98rem;
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.45rem;
+  }
+</style>
+"""
+
+
+def _demo_demonstrates_card(title: str, body_html: str, bottom_line: str) -> str:
+    return (
+        f'<div class="demo-demonstrates-card">'
+        f"<h4>{title}</h4>"
+        f'<div class="demo-card-body">{body_html}</div>'
+        f'<p class="demo-card-bottom"><em>{bottom_line}</em></p></div>'
+    )
+
+
+def _render_what_demo_demonstrates() -> None:
+    dark = st.session_state.ui_theme_radio == "Dark"
+    st.markdown(
+        _demo_demonstrates_layout_styles() + _demo_demonstrates_card_styles(dark=dark),
+        unsafe_allow_html=True,
+    )
+    st.markdown("### What this demo demonstrates")
+    st.markdown(
+        "This demo shows how public, proxy, and synthetic data can be joined into one "
+        "explainable corridor review workflow. The goal is to demonstrate the planning "
+        "process, not to present production outage prediction."
+    )
+
+    card1 = _demo_demonstrates_card(
+        "Bringing disconnected data into one planning view",
+        """
+<p class="demo-card-sub">Public/proxy datasets were joined into one corridor-based workflow.</p>
+<ul>
+<li>Transmission corridors define the planning units</li>
+<li>Satellite data describes vegetation and dryness context</li>
+<li>CWFIS adds wildfire and fire-weather context</li>
+<li>ECCC adds wind, precipitation, and weather stress</li>
+<li>Public outage archive adds historical context</li>
+<li>Synthetic treatment placeholders show where BC Hydro work data would fit</li>
+</ul>
+""",
+        "The value is not one dataset — it is joining many layers into one explainable corridor story.",
+    )
+    card2 = _demo_demonstrates_card(
+        "What the demo does",
+        """
+<p class="demo-card-label">Inputs</p>
+<ul>
+<li>Corridor segments</li>
+<li>Vegetation exposure</li>
+<li>NDVI / NDMI dryness proxy</li>
+<li>Wind / precipitation / weather stress</li>
+<li>Wildfire / FWI context</li>
+<li>Outage proxy</li>
+<li>Synthetic treatment gap</li>
+</ul>
+<p class="demo-card-label">Outputs</p>
+<ul>
+<li>Priority map</li>
+<li>Top review areas</li>
+<li>Problem type</li>
+<li>Reason / risk pathway</li>
+<li>Suggested planning action</li>
+<li>Scenario comparison: inspection / trimming / trimming + inspection</li>
+</ul>
+""",
+        "The demo turns raw layers into a short, explainable review list.",
+    )
+    card3 = _demo_demonstrates_card(
+        "With BC Hydro data, this becomes decision support",
+        """
+<p class="demo-card-label">If BC Hydro provides</p>
+<ul>
+<li>Validated outage history and cause codes</li>
+<li>Vegetation inspection and trimming records</li>
+<li>Feeder / circuit / span topology</li>
+<li>LiDAR, patrol, or field validation</li>
+<li>Crew / restoration / SAIDI / SAIFI context</li>
+</ul>
+<p class="demo-card-label">We could support</p>
+<ul>
+<li>Better outage-risk model validation</li>
+<li>Vegetation treatment prioritization</li>
+<li>&ldquo;Right tree work, right place, right time&rdquo; planning</li>
+<li>Crew staging / patrol planning before storm or wildfire season</li>
+<li>Investment justification with clearer evidence</li>
+</ul>
+""",
+        "Internal data turns the demo from proxy scoring into planner-reviewed prioritization.",
+    )
+    card4 = _demo_demonstrates_card(
+        "Business value: focus resources where risk drivers overlap",
+        """
+<p class="demo-card-label">Value areas</p>
+<ul>
+<li>Reduce unnecessary reviews in low-priority areas</li>
+<li>Prioritize tree cutting where vegetation, weather, wildfire, and history overlap</li>
+<li>Support crew placement and patrol planning</li>
+<li>Improve visibility for funding and regulator discussions</li>
+<li>Build a repeatable workflow for other regions</li>
+</ul>
+""",
+        "This helps planners decide where to look first, why, and what action may be worth reviewing.",
+    )
+
+    st.markdown(
+        f'<div class="demo-demonstrates-grid">{card1}{card2}{card3}{card4}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.caption(
+        "Planning workflow demonstration only — public/proxy/synthetic data, "
+        "not validated BC Hydro production data."
+    )
 
 
 def _render_overview(region: PlanningRegionConfig) -> None:
-    st.markdown("### What this demo shows")
-    st.markdown(
-        """
-        - **Vegetation-wildfire planning workflow** — corridor segments ranked by composite exposure
-        - **Public layer stack** — WorldCover land cover, Sentinel-2 NDVI/NDMI, CWFIS wildfire, ECCC weather stress, outage archive proxy
-        - **Satellite vegetation context** — tree cover, moisture stress, and dryness proxies at corridor level (validated with BC Hydro LiDAR / Planet in production)
-        - **Treatment gap placeholder** — synthetic scores show where BC Hydro work-management data would plug in
-        - **Transparent proxy scoring** — component breakdown and top reasons per corridor segment
-        """
-    )
-    if region.key == "surrey":
-        st.markdown(
-            "- **Causal AI exploration** — Fujitsu Research Surrey AOI scenario exports linked on the Planning tab "
-            "(research context only, not operational scores)"
-        )
-    st.markdown("### What this demo does not show")
-    st.markdown(
-        """
-        - **Outage prediction** — planning prioritization only, not storm or outage forecasting
-        - **Validated wildfire or vegetation treatment prioritization** — scores are illustrative composites
-        - **BC Hydro internal GIS, SAIDI/SAIFI, or patrol records** — public/proxy layers only
-        - **Real-time operational dispatch** — planning-oriented view, not control-room tooling
-        """
-    )
-    st.info(
-        f"Open **{region.label} Planning** (or switch region in the sidebar) for corridor priority maps and component scores. "
-        "See **Data Sources & Assumptions** for the BC Hydro internal data replacement table."
+    if region.planning_disclaimer:
+        st.caption(region.planning_disclaimer)
+    _render_what_demo_demonstrates()
+    st.caption(
+        "Use **Planning** for maps and **Data Sources & Assumptions** for layer inventory."
     )
 
 

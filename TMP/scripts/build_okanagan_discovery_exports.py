@@ -7,8 +7,10 @@ Output: okanagan_discovery_raw.csv
         okanagan_discovery_with_targets.csv
         okanagan_discovery_export_qa.csv
 
-Column mappings (planning dataset -> discovery export):
-  eccc_wind_gust_max_kmh      <- wind_gust_max_kmh
+Column mappings (planning dataset + corridor weather stats -> discovery export):
+  eccc_temperature_mean_c     <- okanagan_weather_stress_stats.csv (corridor join)
+  eccc_precip_total_mm        <- okanagan_weather_stress_stats.csv (corridor join)
+  eccc_wind_gust_max_kmh      <- eccc_wind_gust_max_kmh (weather stats) or wind_gust_max_kmh
   weather_stress_score        <- eccc_weather_stress_score
   distance_to_active_fire_km  <- nearest_fire_km
   worldcover_tree_pct         <- worldcover_tree_pct (same)
@@ -21,10 +23,13 @@ Column mappings (planning dataset -> discovery export):
   tree_contact_exposure_proxy <- tree_contact_exposure_proxy (same, with_targets only)
   outage_history_proxy_score  <- outage_history_proxy_score (same, with_targets only)
 
-Requested columns with no source mapping in the planning dataset (omitted):
-  eccc_temperature_mean_c, eccc_precip_total_mm, fire_danger_score,
-  distance_to_hotspot_km, public_outage_count, public_customers_affected,
-  tree_related_outage_proxy, weather_related_outage_proxy
+Corridor-level weather columns are broadcast from okanagan_weather_stress_stats.csv
+when absent from the planning dataset. Each export column maps to at most one
+source column (no duplicate headers).
+
+Requested columns with no source mapping yet (omitted when unavailable):
+  fire_danger_score, distance_to_hotspot_km, public_outage_count,
+  public_customers_affected, tree_related_outage_proxy, weather_related_outage_proxy
 
 Identifiers, text, geometry, dates, reason fields, recommended actions,
 scenario columns, and synthetic treatment fields are excluded by design
@@ -44,16 +49,17 @@ PROJECT_ROOT = SCRIPT_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 
 DEFAULT_INPUT = PROCESSED_DIR / "okanagan_vegetation_wildfire_planning_dataset.csv"
+DEFAULT_WEATHER_STATS = PROCESSED_DIR / "okanagan_weather_stress_stats.csv"
 OUTPUT_RAW = PROCESSED_DIR / "okanagan_discovery_raw.csv"
 OUTPUT_WITH_TARGETS = PROCESSED_DIR / "okanagan_discovery_with_targets.csv"
 OUTPUT_QA = PROCESSED_DIR / "okanagan_discovery_export_qa.csv"
 
-# source_column -> export_column (only mapped when source exists)
+# source_column -> export_column (first matching source wins; each export col once)
 COLUMN_MAP: dict[str, str] = {
     "eccc_temperature_mean_c": "eccc_temperature_mean_c",
     "eccc_precip_total_mm": "eccc_precip_total_mm",
-    "wind_gust_max_kmh": "eccc_wind_gust_max_kmh",
     "eccc_wind_gust_max_kmh": "eccc_wind_gust_max_kmh",
+    "wind_gust_max_kmh": "eccc_wind_gust_max_kmh",
     "eccc_weather_stress_score": "weather_stress_score",
     "weather_stress_score": "weather_stress_score",
     "worldcover_tree_pct": "worldcover_tree_pct",
@@ -106,10 +112,18 @@ TARGET_SOURCE_MAP: dict[str, str] = {
     "outage_history_proxy_score": "outage_history_proxy_score",
 }
 
+# Corridor-level ECCC aggregates joined when missing from segment-level planning rows.
+WEATHER_JOIN_COLUMNS = [
+    "eccc_temperature_mean_c",
+    "eccc_precip_total_mm",
+    "eccc_wind_gust_max_kmh",
+]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--weather-stats", type=Path, default=DEFAULT_WEATHER_STATS)
     parser.add_argument("--output-raw", type=Path, default=OUTPUT_RAW)
     parser.add_argument("--output-with-targets", type=Path, default=OUTPUT_WITH_TARGETS)
     parser.add_argument("--output-qa", type=Path, default=OUTPUT_QA)
@@ -130,6 +144,29 @@ def _resolve_columns(
     present = [c for c in requested if c in export_to_source]
     absent = [c for c in requested if c not in export_to_source]
     return export_to_source, present, absent
+
+
+def _enrich_with_corridor_weather(
+    source: pd.DataFrame,
+    weather_stats_path: Path,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Broadcast corridor weather stats; only fill columns not already present."""
+    if not weather_stats_path.is_file():
+        return source, []
+
+    weather = pd.read_csv(weather_stats_path)
+    if weather.empty:
+        return source, []
+
+    row = weather.iloc[0]
+    out = source.copy()
+    joined: list[str] = []
+    for col in WEATHER_JOIN_COLUMNS:
+        if col in out.columns or col not in row.index or pd.isna(row[col]):
+            continue
+        out[col] = row[col]
+        joined.append(col)
+    return out, joined
 
 
 def _build_export_frame(
@@ -185,6 +222,7 @@ def main() -> int:
 
     source = pd.read_csv(args.input)
     input_rows = len(source)
+    source, weather_joined = _enrich_with_corridor_weather(source, args.weather_stats)
 
     raw_map, raw_present, raw_absent = _resolve_columns(source, DISCOVERY_RAW_COLUMNS)
     raw_df = _build_export_frame(source, raw_map, DISCOVERY_RAW_COLUMNS)
@@ -223,6 +261,7 @@ def main() -> int:
             "no",
             (
                 f"Input rows={input_rows}; "
+                f"weather_joined_columns={','.join(weather_joined) or 'none'}; "
                 f"absent_requested_columns={','.join(raw_absent) or 'none'}; "
                 f"missing_by_column={raw_missing_notes or 'none'}"
             ),
@@ -232,7 +271,8 @@ def main() -> int:
             with_targets_df,
             ",".join(target_map.keys()) if target_map else "none",
             (
-                f"Input rows={input_rows}; dropped_missing_targets={rows_dropped}; "
+                f"Input rows={input_rows}; weather_joined_columns={','.join(weather_joined) or 'none'}; "
+                f"dropped_missing_targets={rows_dropped}; "
                 f"absent_target_columns={','.join(target_absent) or 'none'}; "
                 f"absent_raw_columns={','.join(raw_absent) or 'none'}; "
                 f"missing_by_column={targets_missing_notes or 'none'}"
@@ -243,6 +283,7 @@ def main() -> int:
     qa_df.to_csv(args.output_qa, index=False)
 
     print(f"Input: {args.input} ({input_rows} rows, {len(source.columns)} columns)")
+    print(f"Weather join from {args.weather_stats}: {', '.join(weather_joined) or 'none'}")
     print(f"Mapped discovery columns ({len(raw_present)}): {', '.join(raw_present)}")
     print(f"Absent from source ({len(raw_absent)}): {', '.join(raw_absent) or 'none'}")
     print(f"Wrote {args.output_raw} ({len(raw_df)} rows, {len(raw_df.columns)} cols)")

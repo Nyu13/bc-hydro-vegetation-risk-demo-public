@@ -44,6 +44,7 @@ from src.weather_loader import (  # noqa: E402
     _parse_timestamp,
     _timestamp_iso,
     _utc_now,
+    _wind_kmh_from_props,
 )
 
 from _okanagan_pipeline_common import OKANAGAN_PROCESSED_DIR, today_iso, write_csv  # noqa: E402
@@ -169,7 +170,7 @@ def _fetch_climate_hourly_chunk(chunk_start: date, chunk_end: date) -> list[dict
                 "station_name": str(props.get("STATION_NAME", "unknown")),
                 "temperature_c": float(props.get("TEMP") or 0),
                 "precipitation_mm": float(props.get("PRECIP_AMOUNT") or 0),
-                "wind_gust_kmh": float(props.get("WIND_SPEED") or 0),
+                "wind_gust_kmh": _wind_kmh_from_props(props),
                 "_dist": _station_distance_sq(props),
             }
         )
@@ -177,16 +178,23 @@ def _fetch_climate_hourly_chunk(chunk_start: date, chunk_end: date) -> list[dict
 
 
 def _pick_kelowna_station(hourly_rows: list[dict]) -> str:
-    stations = {row["station_name"] for row in hourly_rows}
-    for name in stations:
-        if "KELOWNA" in name.upper():
-            return name
     if not hourly_rows:
         return KELOWNA_STATION_NAME
-    return min(
-        stations,
-        key=lambda name: next(row["_dist"] for row in hourly_rows if row["station_name"] == name),
-    )
+
+    by_station: dict[str, list[dict]] = {}
+    for row in hourly_rows:
+        by_station.setdefault(row["station_name"], []).append(row)
+
+    def station_rank(name: str) -> tuple[int, int, float]:
+        rows = by_station[name]
+        wind_count = sum(1 for row in rows if float(row.get("wind_gust_kmh") or 0) > 0)
+        is_ubco = 1 if "UBCO" in name.upper() else 0
+        return (-wind_count, is_ubco, rows[0]["_dist"])
+
+    kelowna_stations = [name for name in by_station if "KELOWNA" in name.upper()]
+    if kelowna_stations:
+        return min(kelowna_stations, key=station_rank)
+    return min(by_station, key=station_rank)
 
 
 def _aggregate_daily_rows(hourly_df: pd.DataFrame, station_name: str) -> pd.DataFrame:
