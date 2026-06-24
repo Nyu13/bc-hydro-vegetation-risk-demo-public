@@ -827,11 +827,11 @@ def _planning_tab(region: PlanningRegionConfig) -> None:
     else:
         st.caption(
             "Corridor lines use **dated CWFIS FWI** at each segment centroid. "
-            "This is separate from the optional FWI raster overlay checkbox below."
+            "This is separate from the optional risk of potential fire raster checkbox below."
         )
     temporal_cols = st.columns(3)
     temporal_cols[0].checkbox(
-        "Show FWI raster overlay (CWFIS)",
+        "Show risk of potential fire raster",
         key=f"{region.key}_show_fwi_raster",
         help=(
             "Optional regional FWI heatmap under the map for the selected date. "
