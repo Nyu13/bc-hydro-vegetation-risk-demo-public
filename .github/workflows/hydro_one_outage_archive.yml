@@ -1,0 +1,60 @@
+# Archive live Hydro One (Ontario) outages every 15 minutes.
+# Unofficial public Kubra Storm Centre feed — not operational Hydro One data.
+#
+# Notes:
+# - GitHub can delay cron jobs (often several minutes); free/private repos may skip
+#   schedules if the repo is inactive.
+# - History accumulates in data/archives/hydro_one_outages/outages_history.csv
+# - Enable Actions on the repo, then push this workflow to the default branch.
+
+name: Hydro One outage archive
+
+on:
+  schedule:
+    # Every 15 minutes (UTC). Expect drift vs exact :00/:15/:30/:45.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hydro-one-outage-archive
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests mercantile polyline pandas
+
+      - name: Fetch Hydro One outages
+        run: |
+          mkdir -p data/archives/hydro_one_outages
+          python TMP/scripts/fetch_hydro_one_outages.py \
+            --out-dir data/archives/hydro_one_outages \
+            --append-history
+
+      - name: Commit archive if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/archives/hydro_one_outages
+          if git diff --staged --quiet; then
+            echo "No archive changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: archive Hydro One outage snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
