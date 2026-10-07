@@ -1,0 +1,2 @@
+snapshot_id,fetched_at_utc,expected_outages,fetched_outages,customers_affected_total,snapshot_dir
+20261007_193020Z,2026-10-07T19:30:20.491997+00:00,55,55,1034,latest
