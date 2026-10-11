@@ -1,15 +1,15 @@
 {
   "utility": "Hydro One",
   "province": "Ontario",
-  "fetched_at_utc": "2026-10-11T06:58:55.133815+00:00",
-  "snapshot_id": "20261011_065855Z",
+  "fetched_at_utc": "2026-10-11T13:56:32.457788+00:00",
+  "snapshot_id": "20261011_135632Z",
   "instance_id": "b8d8094c-3809-49e5-bf8b-1ddd27f6e12d",
   "view_id": "5c2283d7-eff9-4f7e-966b-3afd90d8a6b9",
   "stormcentre_url": "https://stormcentre.hydroone.com/",
-  "expected_outages": 4,
-  "customers_affected_total": 19,
-  "fetched_outages": 4,
-  "summary_date_generated": "2026-10-11T06:48:26.722494366Z",
+  "expected_outages": 24,
+  "customers_affected_total": 121,
+  "fetched_outages": 23,
+  "summary_date_generated": "2026-10-11T13:48:28.317690100Z",
   "bbox_filter": null,
   "disclaimer": "Unofficial public Kubra Storm Centre snapshot for demo use only. Not Hydro One operational data."
 }
