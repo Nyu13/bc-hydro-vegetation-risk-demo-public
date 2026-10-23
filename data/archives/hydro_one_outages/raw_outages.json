@@ -5,7 +5,8 @@
     "desc": {
       "n_out": 1,
       "cust_a": {
-        "val": 2057
+        "val": 19,
+        "mask": 20
       },
       "inc_id": null,
       "crew_status": {
@@ -14,7 +15,40 @@
         "orig": "A"
       },
       "cluster": false,
-      "etr": "ETR-NULL",
+      "etr": "2026-10-23T12:30:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "{tglGdd}cN"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/98ddef88-99ef-4e6b-9094-a6ef40aafb2c/public/cluster-1/0302231.json",
+    "_quadkey": "0302231"
+  },
+  {
+    "id": "7-1",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 26
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
+      },
+      "cluster": false,
+      "etr": "2026-10-23T10:45:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -26,14 +60,14 @@
     },
     "geom": {
       "a": [
-        "kp`fHpt}hNyMtlAyig@xruC_MfZu_YujDiI{`@OeBcbIsccAznb@sbhCjd@u_@l^lQfde@hl`@jI~uArJnzBhe@tiQ"
+        "mqtkGx~ggNQh\\qIrDcnCbv@`B_g@b`BwoBxUhIf^js@"
       ],
       "p": [
-        "w_igHfrmjN"
+        "kyvkGznhgN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/112/e0192d42-e3c7-4d12-9872-137fb6304921/88dcaf32-c773-4a81-ac1e-9556bc377aef/public/cluster-1/0302211.json",
-    "_quadkey": "0302211"
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/98ddef88-99ef-4e6b-9094-a6ef40aafb2c/public/cluster-1/0302231.json",
+    "_quadkey": "0302231"
   },
   {
     "id": "7-0",
@@ -51,25 +85,23 @@
         "orig": "G"
       },
       "cluster": false,
-      "etr": "2026-10-23T06:45:00Z",
+      "etr": "2026-10-23T12:00:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Currently Under Investigation",
-        "ES-ES": "En cours d'investigation",
-        "fr-CA": "En cours d'investigation",
-        "orig": "CUSTE60_1"
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
       "p": [
-        "s~snG~}kbN"
+        "ybtdGrrseN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/88dcaf32-c773-4a81-ac1e-9556bc377aef/public/cluster-1/0302231.json",
-    "_quadkey": "0302231"
+    "_source_url": "https://kubra.io/cluster-data/332/e0192d42-e3c7-4d12-9872-137fb6304921/98ddef88-99ef-4e6b-9094-a6ef40aafb2c/public/cluster-1/0302233.json",
+    "_quadkey": "0302233"
   },
   {
     "id": "7-0",
@@ -82,12 +114,12 @@
       },
       "inc_id": null,
       "crew_status": {
-        "EN-US": "Outage reported and a crew will be dispatched soon",
-        "fr-CA": "La panne a \u00e9t\u00e9 signal\u00e9e et une \u00e9quipe sera bient\u00f4t d\u00e9ploy\u00e9e.",
-        "orig": "U"
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
       },
       "cluster": false,
-      "etr": "2026-10-23T06:15:00Z",
+      "etr": "2026-10-23T12:00:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -99,10 +131,10 @@
     },
     "geom": {
       "p": [
-        "udkmGdhxzM"
+        "kxfxGdbuwM"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/88dcaf32-c773-4a81-ac1e-9556bc377aef/public/cluster-1/0302320.json",
-    "_quadkey": "0302320"
+    "_source_url": "https://kubra.io/cluster-data/203/e0192d42-e3c7-4d12-9872-137fb6304921/98ddef88-99ef-4e6b-9094-a6ef40aafb2c/public/cluster-1/0302302.json",
+    "_quadkey": "0302302"
   }
 ]
