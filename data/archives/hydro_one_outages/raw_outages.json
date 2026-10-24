@@ -1,6 +1,6 @@
 [
   {
-    "id": "12-0",
+    "id": "7-0",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
@@ -10,12 +10,12 @@
       },
       "inc_id": null,
       "crew_status": {
-        "EN-US": "Crew Working in Area",
-        "fr-CA": "Travaux en cours dans la zone",
-        "orig": "W"
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
       },
       "cluster": false,
-      "etr": "2026-10-24T18:00:00Z",
+      "etr": "2026-10-24T22:15:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -27,11 +27,47 @@
     },
     "geom": {
       "p": [
-        "k``eGhlqrN"
+        "_awyH`ewdP"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/021/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/030223211120.json",
-    "_quadkey": "030223211120"
+    "_source_url": "https://kubra.io/cluster-data/131/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0213131.json",
+    "_quadkey": "0213131"
+  },
+  {
+    "id": "12-0",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 19,
+        "mask": 20
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Outage reported and a crew will be dispatched soon",
+        "fr-CA": "La panne a \u00e9t\u00e9 signal\u00e9e et une \u00e9quipe sera bient\u00f4t d\u00e9ploy\u00e9e.",
+        "orig": "U"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T20:00:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "OTHER30_5"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "w`_`Gzo~wN"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/032/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030223212230.json",
+    "_quadkey": "030223212230"
   },
   {
     "id": "12-1",
@@ -49,40 +85,43 @@
         "orig": "U"
       },
       "cluster": false,
-      "etr": "2026-10-24T19:15:00Z",
+      "etr": "2026-10-24T21:30:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Pending Classification",
-        "fr-CA": "En voie de classification"
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "OTHER30_5"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
       "p": [
-        "k``eGhlqrN"
+        "of``Gr}}wN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/021/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/030223211120.json",
-    "_quadkey": "030223211120"
+    "_source_url": "https://kubra.io/cluster-data/032/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030223212230.json",
+    "_quadkey": "030223212230"
   },
   {
-    "id": "10-0",
+    "id": "12-2",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
       "cust_a": {
-        "val": 98
+        "val": 19,
+        "mask": 20
       },
       "inc_id": null,
       "crew_status": {
-        "EN-US": "Under Investigation",
-        "fr-CA": "\u00c9valuation en cours",
-        "orig": "G"
+        "EN-US": "Crew Working in Area",
+        "fr-CA": "Travaux en cours dans la zone",
+        "orig": "W"
       },
       "cluster": false,
-      "etr": "2026-10-24T19:00:00Z",
+      "etr": "2026-10-24T20:00:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -96,17 +135,55 @@
     },
     "geom": {
       "a": [
-        "uat_Glv~wNsxFvaFmrDeiB~lAc~Bp{@egA~}GbjAnBrB"
+        "ii_`Gdx_xNud@bvBoCbJWqqArDyNhd@{^"
       ],
       "p": [
-        "{k{_Gju`xN"
+        "oe``G|paxN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/221/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/0302232122.json",
-    "_quadkey": "0302232122"
+    "_source_url": "https://kubra.io/cluster-data/032/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030223212230.json",
+    "_quadkey": "030223212230"
   },
   {
-    "id": "10-1",
+    "id": "12-3",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 383
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "A"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T20:00:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "OTHER30_5"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "a": [
+        "uat_Glv~wNy|KxvM}}G{}@{oAkTxXugN~nHo`@h_M~aCnBrB"
+      ],
+      "p": [
+        "{rb`GfecxN"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/032/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030223212230.json",
+    "_quadkey": "030223212230"
+  },
+  {
+    "id": "12-0",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
@@ -121,25 +198,23 @@
         "orig": "U"
       },
       "cluster": false,
-      "etr": "2026-10-24T19:45:00Z",
+      "etr": "2026-10-24T22:45:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Currently Under Investigation",
-        "ES-ES": "En cours d'investigation",
-        "fr-CA": "En cours d'investigation",
-        "orig": "OTHER30_5"
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
       "p": [
-        "sbe`GvawwN"
+        "mwd`GnvkwN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/221/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/0302232122.json",
-    "_quadkey": "0302232122"
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030223212231.json",
+    "_quadkey": "030223212231"
   },
   {
     "id": "7-0",
@@ -152,36 +227,31 @@
       },
       "inc_id": null,
       "crew_status": {
-        "EN-US": "Crew Working in Area",
-        "fr-CA": "Travaux en cours dans la zone",
-        "orig": "W"
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
       },
       "cluster": false,
-      "etr": "2026-10-24T18:30:00Z",
+      "etr": "2026-10-24T22:15:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Replacing Underwater Cable",
-        "ES-ES": "Remplacement d'un c\u00e2ble sous-marin",
-        "fr-CA": "Remplacement d'un c\u00e2ble sous-marin",
-        "orig": "PLANN32"
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
-      "a": [
-        "qyqrGj`oeNm^|oAoXh_@{NkUv{@arA`KyF"
-      ],
       "p": [
-        "_`srGt_qeN"
+        "krjrGx`z_N"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/312/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/0302213.json",
+    "_source_url": "https://kubra.io/cluster-data/312/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302213.json",
     "_quadkey": "0302213"
   },
   {
-    "id": "8-0",
+    "id": "7-0",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
@@ -195,7 +265,7 @@
         "orig": "W"
       },
       "cluster": false,
-      "etr": "2026-10-24T18:00:00Z",
+      "etr": "2026-10-24T20:30:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -214,79 +284,11 @@
         "yjdqGxcmnN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/013/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03022310.json",
-    "_quadkey": "03022310"
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302231.json",
+    "_quadkey": "0302231"
   },
   {
-    "id": "8-0",
-    "title": "Area Outage",
-    "desc": {
-      "n_out": 1,
-      "cust_a": {
-        "val": 19,
-        "mask": 20
-      },
-      "inc_id": null,
-      "crew_status": {
-        "EN-US": "Under Investigation",
-        "fr-CA": "\u00c9valuation en cours",
-        "orig": "G"
-      },
-      "cluster": false,
-      "etr": "2026-10-24T19:30:00Z",
-      "etr_confidence": null,
-      "comments": null,
-      "cause": {
-        "EN-US": "Pending Classification",
-        "fr-CA": "En voie de classification"
-      },
-      "crew_icon": true,
-      "start_time": null
-    },
-    "geom": {
-      "p": [
-        "mdslGvh`bN"
-      ]
-    },
-    "_source_url": "https://kubra.io/cluster-data/113/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03022311.json",
-    "_quadkey": "03022311"
-  },
-  {
-    "id": "8-0",
-    "title": "Area Outage",
-    "desc": {
-      "n_out": 1,
-      "cust_a": {
-        "val": 19,
-        "mask": 20
-      },
-      "inc_id": null,
-      "crew_status": {
-        "EN-US": "Crew Working in Area",
-        "fr-CA": "Travaux en cours dans la zone",
-        "orig": "W"
-      },
-      "cluster": false,
-      "etr": "2026-10-24T18:30:00Z",
-      "etr_confidence": null,
-      "comments": null,
-      "cause": {
-        "EN-US": "Pending Classification",
-        "fr-CA": "En voie de classification"
-      },
-      "crew_icon": true,
-      "start_time": null
-    },
-    "geom": {
-      "p": [
-        "u|dkG~f|eN"
-      ]
-    },
-    "_source_url": "https://kubra.io/cluster-data/313/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03022313.json",
-    "_quadkey": "03022313"
-  },
-  {
-    "id": "8-1",
+    "id": "7-1",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
@@ -301,7 +303,7 @@
         "orig": "U"
       },
       "cluster": false,
-      "etr": "2026-10-24T19:00:00Z",
+      "etr": "2026-10-24T22:00:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -316,8 +318,42 @@
         "mk`kGfuzfN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/313/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03022313.json",
-    "_quadkey": "03022313"
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302231.json",
+    "_quadkey": "0302231"
+  },
+  {
+    "id": "7-2",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 19,
+        "mask": 20
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T20:45:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "}nalGj~s_N"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/132/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302231.json",
+    "_quadkey": "0302231"
   },
   {
     "id": "7-0",
@@ -335,7 +371,7 @@
         "orig": "G"
       },
       "cluster": false,
-      "etr": "2026-10-24T19:30:00Z",
+      "etr": "2026-10-24T21:15:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
@@ -347,11 +383,11 @@
     },
     "geom": {
       "p": [
-        "wwgsGt|isM"
+        "q{}dGvlflN"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/203/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/0302302.json",
-    "_quadkey": "0302302"
+    "_source_url": "https://kubra.io/cluster-data/332/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302233.json",
+    "_quadkey": "0302233"
   },
   {
     "id": "7-0",
@@ -364,6 +400,39 @@
       },
       "inc_id": null,
       "crew_status": {
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T20:45:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "sa`xGr_dxM"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/203/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302302.json",
+    "_quadkey": "0302302"
+  },
+  {
+    "id": "7-0",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 34
+      },
+      "inc_id": null,
+      "crew_status": {
         "EN-US": "Crew Working in Area",
         "fr-CA": "Travaux en cours dans la zone",
         "orig": "W"
@@ -373,24 +442,61 @@
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Replacing Transformer",
-        "ES-ES": "Remplacement d'un transformateur",
-        "fr-CA": "Remplacement d'un transformateur",
-        "orig": "PLANN29"
+        "EN-US": "Performing Switching",
+        "ES-ES": "Permutation alimentation d'une ligne \u00e0 l'autre",
+        "fr-CA": "Permutation alimentation d'une ligne \u00e0 l'autre",
+        "orig": "PLANN12"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "a": [
+        "ibnkGp|`uMoHaB{IsP`B_JnDcHbGkFtBdo@"
+      ],
+      "p": [
+        "cknkG|e`uM"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302320.json",
+    "_quadkey": "0302320"
+  },
+  {
+    "id": "7-1",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 19,
+        "mask": 20
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Under Investigation",
+        "fr-CA": "\u00c9valuation en cours",
+        "orig": "G"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T20:15:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Pending Classification",
+        "fr-CA": "En voie de classification"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
       "p": [
-        "cguoGf}l{M"
+        "mdnnG~~`sM"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/0302320.json",
+    "_source_url": "https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302320.json",
     "_quadkey": "0302320"
   },
   {
-    "id": "11-0",
+    "id": "7-2",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
@@ -405,12 +511,84 @@
         "orig": "U"
       },
       "cluster": false,
-      "etr": "2026-10-24T18:15:00Z",
+      "etr": "2026-10-24T22:15:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
         "EN-US": "Pending Classification",
         "fr-CA": "En voie de classification"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "syynGhbk~M"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/0302320.json",
+    "_quadkey": "0302320"
+  },
+  {
+    "id": "12-0",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 19,
+        "mask": 20
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Outage reported and a crew will be dispatched soon",
+        "fr-CA": "La panne a \u00e9t\u00e9 signal\u00e9e et une \u00e9quipe sera bient\u00f4t d\u00e9ploy\u00e9e.",
+        "orig": "U"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T21:30:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "HUMAN92_1"
+      },
+      "crew_icon": true,
+      "start_time": null
+    },
+    "geom": {
+      "p": [
+        "ye}qGx{`jM"
+      ]
+    },
+    "_source_url": "https://kubra.io/cluster-data/000/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030232101000.json",
+    "_quadkey": "030232101000"
+  },
+  {
+    "id": "12-1",
+    "title": "Area Outage",
+    "desc": {
+      "n_out": 1,
+      "cust_a": {
+        "val": 19,
+        "mask": 20
+      },
+      "inc_id": null,
+      "crew_status": {
+        "EN-US": "Outage reported and a crew will be dispatched soon",
+        "fr-CA": "La panne a \u00e9t\u00e9 signal\u00e9e et une \u00e9quipe sera bient\u00f4t d\u00e9ploy\u00e9e.",
+        "orig": "U"
+      },
+      "cluster": false,
+      "etr": "2026-10-24T21:00:00Z",
+      "etr_confidence": null,
+      "comments": null,
+      "cause": {
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "HUMAN92_1"
       },
       "crew_icon": true,
       "start_time": null
@@ -420,50 +598,16 @@
         "}j}qGby`jM"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/001/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03023210100.json",
-    "_quadkey": "03023210100"
+    "_source_url": "https://kubra.io/cluster-data/000/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030232101000.json",
+    "_quadkey": "030232101000"
   },
   {
-    "id": "11-1",
+    "id": "12-2",
     "title": "Area Outage",
     "desc": {
       "n_out": 1,
       "cust_a": {
-        "val": 19,
-        "mask": 20
-      },
-      "inc_id": null,
-      "crew_status": {
-        "EN-US": "Outage reported and a crew will be dispatched soon",
-        "fr-CA": "La panne a \u00e9t\u00e9 signal\u00e9e et une \u00e9quipe sera bient\u00f4t d\u00e9ploy\u00e9e.",
-        "orig": "U"
-      },
-      "cluster": false,
-      "etr": "2026-10-24T19:00:00Z",
-      "etr_confidence": null,
-      "comments": null,
-      "cause": {
-        "EN-US": "Pending Classification",
-        "fr-CA": "En voie de classification"
-      },
-      "crew_icon": true,
-      "start_time": null
-    },
-    "geom": {
-      "p": [
-        "ym}qGbuwiM"
-      ]
-    },
-    "_source_url": "https://kubra.io/cluster-data/001/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03023210100.json",
-    "_quadkey": "03023210100"
-  },
-  {
-    "id": "11-2",
-    "title": "Area Outage",
-    "desc": {
-      "n_out": 1,
-      "cust_a": {
-        "val": 94
+        "val": 116
       },
       "inc_id": null,
       "crew_status": {
@@ -472,25 +616,27 @@
         "orig": "A"
       },
       "cluster": false,
-      "etr": "2026-10-24T18:00:00Z",
+      "etr": "2026-10-24T21:00:00Z",
       "etr_confidence": null,
       "comments": null,
       "cause": {
-        "EN-US": "Pending Classification",
-        "fr-CA": "En voie de classification"
+        "EN-US": "Currently Under Investigation",
+        "ES-ES": "En cours d'investigation",
+        "fr-CA": "En cours d'investigation",
+        "orig": "HUMAN92_1"
       },
       "crew_icon": true,
       "start_time": null
     },
     "geom": {
       "a": [
-        "mtyqGfnfjMmj@bk@}SSwx@mn@g{Fe|Q_C{z@|yCyAvpDxdAz\\|h@xN`oP"
+        "mtyqGfnfjMmj@bk@}SSwx@mn@y|@ggSjmAs_H~I`JvmAtpJxN`oP"
       ],
       "p": [
-        "}h~qGrzziM"
+        "}j|qGdtyiM"
       ]
     },
-    "_source_url": "https://kubra.io/cluster-data/001/e0192d42-e3c7-4d12-9872-137fb6304921/93a51998-5d79-45e4-bb15-ff6ff300ccf8/public/cluster-1/03023210100.json",
-    "_quadkey": "03023210100"
+    "_source_url": "https://kubra.io/cluster-data/000/e0192d42-e3c7-4d12-9872-137fb6304921/7643c5d9-9629-4e45-a241-b5393355cb7d/public/cluster-1/030232101000.json",
+    "_quadkey": "030232101000"
   }
 ]
