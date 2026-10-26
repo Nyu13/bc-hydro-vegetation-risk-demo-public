@@ -1,1 +1,2 @@
-outage_id,title,customers_affected,latitude,longitude,utility,province,feed
+outage_id,title,customers_affected,n_outages_in_cluster_record,cause,status,etr,start_time,region,municipality,latitude,longitude,cluster,source_url,quadkey,utility,province,feed,data_source_notes
+7-0,Area Outage,40,1,Pending Classification,,2026-10-26T17:00:00Z,,,,45.07931,-76.99652,False,https://kubra.io/cluster-data/023/e0192d42-e3c7-4d12-9872-137fb6304921/e9dfe77b-0e81-4b08-badf-5edefda2c2a3/public/cluster-1/0302320.json,0302320,Hydro One,Ontario,kubra_stormcentre_live,Unofficial public Hydro One Storm Centre (Kubra) live snapshot; not operational outage history.
